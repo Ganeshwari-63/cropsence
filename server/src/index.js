@@ -1,6 +1,15 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import path from 'node:path'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const clientDistPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../client/dist'
+)
+const clientIndexPath = path.join(clientDistPath, 'index.html')
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -326,6 +335,22 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
   }
 })
 
+if (existsSync(clientIndexPath)) {
+  app.use(express.static(clientDistPath))
+  app.use((request, response, next) => {
+    if (
+      request.method !== 'GET' ||
+      request.path === '/api' ||
+      request.path.startsWith('/api/')
+    ) {
+      return next()
+    }
+
+    response.sendFile(clientIndexPath, (error) => {
+      if (error) next(error)
+    })
+  })
+}
 app.listen(port, '0.0.0.0', () => {
   console.log(`CropSense server is running on port ${port}`)
 })
