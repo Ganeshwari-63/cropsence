@@ -62,7 +62,7 @@ export const sourceCredits = {
   te: {
     title: 'డేటా మరియు సేవల మూలాలు',
     weatherData: 'వాతావరణ సూచన మరియు గత వర్షపాతం సమాచారం:',
-    weatherFormattin g: 'CropSense రూపంలో చూపించబడుతుంది.',
+    weatherFormatting: 'CropSense రూపంలో చూపించబడుతుంది.',
     license: 'లైసెన్స్:',
     placeSearch: 'ప్రాంతం పేరు శోధన సమాచారం:',
     geonamesNote: 'డేటా మూలం:',
