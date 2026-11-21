@@ -352,6 +352,11 @@ html:lang(pa) {
   padding: 138px 0 76px;
 }
 
+.about-page {
+  position: relative;
+  z-index: 1;
+}
+
 .features-intro {
   max-width: 780px;
   margin-bottom: 38px;
@@ -578,9 +583,9 @@ html:lang(pa) {
   border: 1px solid #e2e9d9;
   border-radius: 32px;
   background:
-    radial-gradient(circle at 82% 24%, rgb(237 195 103 / 44%) 0 54px, transparent 55px),
-    linear-gradient(115deg, #fbfaf4 0%, #eef3e5 58%, #dce8d0 100%);
+    linear-gradient(115deg, rgb(251 250 244 / 91%) 0%, rgb(238 243 229 / 88%) 58%, rgb(220 232 208 / 85%) 100%);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(4px);
 }
 
 .about-hero-copy {
@@ -603,62 +608,20 @@ html:lang(pa) {
 
 .about-art {
   position: relative;
-  display: grid;
+  aspect-ratio: 5 / 4;
   min-height: 250px;
-  place-items: center;
   overflow: hidden;
   border-radius: 25px;
-  background: linear-gradient(180deg, #c7e0d4 0%, #e7e8c3 56%, #9fbe7c 57%, #668d53 100%);
+  background: #78956a;
 }
 
-.about-art::before,
-.about-art::after {
+.about-field-photo {
   position: absolute;
-  right: -20%;
-  bottom: -30%;
-  left: -20%;
-  height: 70%;
-  border-radius: 50% 50% 0 0;
-  background: rgb(50 105 57 / 42%);
-  content: "";
-}
-
-.about-art::after {
-  bottom: -43%;
-  background: rgb(33 83 46 / 50%);
-}
-
-.about-art .tool-illustration {
-  z-index: 2;
-  width: 122px;
-  height: 122px;
-  border-radius: 36px;
-}
-
-.about-sun {
-  position: absolute;
-  top: 24px;
-  right: 32px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #f0ca6c;
-}
-
-.about-field {
-  position: absolute;
-  z-index: 1;
-  right: -12%;
-  bottom: 18%;
-  left: -12%;
-  height: 2px;
-  background: rgb(241 224 165 / 75%);
-  transform: rotate(-8deg);
-}
-
-.about-field-two {
-  bottom: 10%;
-  transform: rotate(-11deg);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
 }
 
 .about-process {
@@ -1921,6 +1884,11 @@ html:lang(pa) h1 {
   background: linear-gradient(180deg, rgb(10 34 22 / 72%) 0%, rgb(15 42 27 / 42%) 38%, rgb(245 247 239 / 91%) 100%);
 }
 
+.tool-video-shade-about {
+  background: linear-gradient(180deg, rgb(10 34 22 / 30%) 0%, rgb(15 42 27 / 18%) 48%, rgb(245 247 239 / 38%) 100%);
+}
+
+.about-page,
 .weather-page,
 .crop-page,
 .disease-page,
@@ -1988,33 +1956,15 @@ html:lang(pa) h1 {
   }
 }
 
-.about-credits {
-  margin-top: 42px;
-  padding: clamp(22px, 4vw, 34px);
-  border: 1px solid #dfe8d7;
-  border-radius: 24px;
-  background: #f5f7ef;
+.about-attribution {
+  display: block;
+  margin-top: 16px;
+  color: #667467;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
-.about-credits h2 {
-  margin: 0;
-  color: #294f35;
-  font-size: clamp(24px, 3vw, 34px);
-}
-
-.about-credits ul {
-  display: grid;
-  gap: 12px;
-  margin: 20px 0 0;
-  padding-left: 20px;
-}
-
-.about-credits li {
-  color: #465c4b;
-  line-height: 1.75;
-}
-
-.about-credits a,
+.about-attribution a,
 .inline-data-source a {
   color: #285b39;
   font-weight: 700;

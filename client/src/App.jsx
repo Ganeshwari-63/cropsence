@@ -143,16 +143,18 @@ function ToolVideoBackground({ pathname }) {
     '/yield': 'yield',
   }
   const tool = toolByPath[pathname]
+  const isAboutPage = pathname === '/about'
 
-  if (!tool) return null
+  if (!tool && !isAboutPage) return null
+  const videoSource = tool ? `/videos/features/${tool}.mp4` : '/videos/rice-field.mp4'
 
   return (
-    <div className={'tool-video-backdrop tool-video-backdrop-' + tool} aria-hidden="true">
+    <div className={'tool-video-backdrop tool-video-backdrop-' + (tool || 'about')} aria-hidden="true">
       <video autoPlay muted loop playsInline preload="metadata" tabIndex={-1}>
-        <source src={'/videos/features/' + tool + '.mp4'} type="video/mp4" />
+        <source src={videoSource} type="video/mp4" />
         <source src="/videos/rice-field.mp4" type="video/mp4" />
       </video>
-      <div className="tool-video-shade" />
+      <div className={'tool-video-shade' + (isAboutPage ? ' tool-video-shade-about' : '')} />
     </div>
   )
 }
@@ -296,10 +298,20 @@ function AboutPage() {
           <p className="about-lead">{t('aboutDescription')}</p>
         </div>
         <div className="about-art" aria-hidden="true">
-          <ToolIllustration kind="crop" />
-          <span className="about-sun" />
-          <span className="about-field about-field-one" />
-          <span className="about-field about-field-two" />
+          <video
+            className="about-field-photo"
+            muted
+            playsInline
+            preload="metadata"
+            tabIndex={-1}
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget
+              video.currentTime = Math.min(4, video.duration / 2)
+            }}
+            onSeeked={(event) => event.currentTarget.pause()}
+          >
+            <source src="/videos/rice-field.mp4" type="video/mp4" />
+          </video>
         </div>
       </section>
 
@@ -326,45 +338,14 @@ function AboutPage() {
         <p>{t('disclaimer')}</p>
       </aside>
 
-      <section className="about-credits" aria-labelledby="about-credits-title">
-        <h2 id="about-credits-title">{credits.title}</h2>
-        <ul>
-          <li>
-            {credits.weatherData}{' '}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.{' '}
-            {credits.weatherFormatting} {credits.license}{' '}
-            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.
-          </li>
-          <li>
-            {credits.placeSearch}{' '}
-            <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding</a>;{' '}
-            {credits.geonamesNote}{' '}
-            <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>{' '}
-            (<a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noreferrer">CC BY-NC 4.0</a>).
-          </li>
-          <li>
-            {credits.reverseLookup}{' '}
-            <a href="https://nominatim.org/" target="_blank" rel="noreferrer">Nominatim</a>.{' '}
-            {credits.mapData}{' '}
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>{' '}
-            (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL 1.0</a>).
-          </li>
-          <li>
-            {credits.pinLookup}{' '}
-            <a href="https://pincodeapi.in/terms/" target="_blank" rel="noreferrer">PincodeAPI.in</a>,{' '}
-            <a href="https://api.postalpincode.in/" target="_blank" rel="noreferrer">PostalPincode.in</a>.{' '}
-            {credits.pinNote}
-          </li>
-          <li>
-            {credits.leafCheck}{' '}
-            <a href="https://ai.google.dev/gemini-api/docs" target="_blank" rel="noreferrer">Google Gemini API</a>.
-          </li>
-          <li>
-            {credits.cropReference}{' '}
-            <a href="https://icar.gov.in/sites/default/files/Circulars/ICAR-En-Kharif-Agro-Advisories-for-Farmers-2025.pdf" target="_blank" rel="noreferrer">ICAR Kharif Agro-Advisories for Farmers 2025</a>.
-          </li>
-        </ul>
-      </section>
+      <small className="about-attribution">
+        {credits.placeSearch}{' '}
+        <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>{' '}
+        (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>) ·{' '}
+        {credits.mapData}{' '}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>{' '}
+        (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL 1.0</a>)
+      </small>
     </main>
   )
 }
