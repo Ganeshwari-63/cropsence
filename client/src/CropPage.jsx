@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { findLocation, formatLocationLabel, nameCoordinates } from './locationService.js'
+import { findLocation, formatLocationLabel, getDevicePosition, nameCoordinates } from './locationService.js'
 import { useLanguage } from './locales/LanguageContext.jsx'
 import { featureText, cropNames, soilNames, cropReasonText, cropErrors, soilReasonText } from './locales/featureText.js'
 import { translations } from './locales/translations.js'
+import { sourceCredits } from './locales/sourceCredits.js'
 
 const crops = [
   {
@@ -214,6 +215,7 @@ export default function CropPage() {
   const { language } = useLanguage()
   const season = getSeason(new Date())
   const t = featureText[language] || featureText.en
+  const credits = sourceCredits[language] || sourceCredits.en
   const localeNames = cropNames[language] || cropNames.en
   const localeSoils = soilNames[language] || soilNames.en
   const localizedSeason = translations[language]?.[season.toLowerCase()] || season
@@ -235,9 +237,16 @@ export default function CropPage() {
       const localized = { ...place, ...named }
       setPlace(localized)
       localStorage.setItem('cropsense-location', JSON.stringify(localized))
-    }).catch(() => {})
+    }).catch(() => {
+      if (!active || place.provider !== 'OpenStreetMap') return
+      if (place.name === t.location && !place.region) return
+      const fallback = { ...place, name: t.location, region: '' }
+      setPlace(fallback)
+      localStorage.setItem('cropsense-location', JSON.stringify(fallback))
+      setError(t.locationError)
+    })
     return () => { active = false }
-  }, [place, language])
+  }, [place, language, t.location, t.locationError])
 
   const soil = soilOverride
   const temperature = weather?.current?.temperature_2m
@@ -351,16 +360,21 @@ export default function CropPage() {
     setError('')
     if (!navigator.geolocation) return setError(t.geoUnavailable)
     setLocating(true)
-    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
-      try {
-        const named = await nameCoordinates(coords.latitude, coords.longitude, language)
-        const found = { ...named, latitude: coords.latitude, longitude: coords.longitude }
-        setPlace(found)
-        localStorage.setItem('cropsense-location', JSON.stringify(found))
-      } catch {
-        setError(t.locationError)
-      } finally { setLocating(false) }
-    }, () => { setError(t.permission); setLocating(false) })
+    getDevicePosition()
+      .then(async ({ coords }) => {
+        try {
+          const named = await nameCoordinates(coords.latitude, coords.longitude, language)
+          const found = { ...named, latitude: coords.latitude, longitude: coords.longitude }
+          setPlace(found)
+          localStorage.setItem('cropsense-location', JSON.stringify(found))
+        } catch {
+          setError(t.locationError)
+        }
+      })
+      .catch((locationError) => {
+        setError(locationError?.code === 1 ? t.permission : t.geoUnavailable)
+      })
+      .finally(() => setLocating(false))
   }
 
   return (
@@ -378,7 +392,6 @@ export default function CropPage() {
             ? formatLocationLabel(place)
             : t.searchHint}
         </p>
-        {place?.provider === 'OpenStreetMap' && <small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></small>}
         <button className="secondary-button" type="button" onClick={useMyLocation} disabled={locating}>
           {locating ? t.locating : t.useLocation}
         </button>
@@ -452,6 +465,10 @@ export default function CropPage() {
               </>
             )}
           </p>
+          <p className="inline-data-source">
+            {credits.weatherDataBy}{' '}
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
+          </p>
 
           {!weather && !error && (
             <p className="loading-message">
@@ -495,9 +512,7 @@ export default function CropPage() {
               </p>
             )}
 
-            <p className="crop-data-source">
-              {t.source} (<a href="https://icar.gov.in/sites/default/files/Circulars/ICAR%20En-Kharif-Agro-Advisories%20for%20Farmers-2025.pdf" target="_blank" rel="noreferrer">ICAR</a>)
-            </p>
+            <p className="crop-data-source">{t.source}</p>
           </section>
           )}
 

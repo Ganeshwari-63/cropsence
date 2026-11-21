@@ -1,5 +1,26 @@
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
 
+export function getDevicePosition() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => {
+        if (error.code === 1) {
+          reject(error)
+          return
+        }
+
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          timeout: 15_000,
+          maximumAge: 60_000,
+        })
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
+    )
+  })
+}
+
 const indiaPlaceNames = {
   bangalore: 'Bengaluru',
   mysore: 'Mysuru',

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from './locales/LanguageContext.jsx'
 import { yieldText, cropNames, soilNames } from './locales/featureText.js'
-import { nameCoordinates } from './locationService.js'
+import { formatLocationLabel, nameCoordinates } from './locationService.js'
+import { sourceCredits } from './locales/sourceCredits.js'
 
 const crops = [
   { name: 'Rice', icon: '🌾', yieldPerAcre: 18, soils: ['Alluvial', 'Red', 'Laterite'], minRain: 100, maxRain: 900 },
@@ -71,6 +72,7 @@ export default function YieldPage() {
   const t = yieldText[language] || yieldText.en
   const names = cropNames[language] || cropNames.en
   const soils = soilNames[language] || soilNames.en
+  const credits = sourceCredits[language] || sourceCredits.en
   const [place, setPlace] = useState(readSavedLocation)
   const [weather, setWeather] = useState(null)
   const [selectedCrop, setSelectedCrop] = useState(crops[0])
@@ -87,9 +89,15 @@ export default function YieldPage() {
       const localized = { ...place, ...named }
       setPlace(localized)
       localStorage.setItem('cropsense-location', JSON.stringify(localized))
-    }).catch(() => {})
+    }).catch(() => {
+      if (!active || place.provider !== 'OpenStreetMap') return
+      if (place.name === t.location && !place.region) return
+      const fallback = { ...place, name: t.location, region: '' }
+      setPlace(fallback)
+      localStorage.setItem('cropsense-location', JSON.stringify(fallback))
+    })
     return () => { active = false }
-  }, [place, language])
+  }, [place, language, t.location])
 
   useEffect(() => {
     if (!place) return
@@ -168,9 +176,8 @@ export default function YieldPage() {
         {place ? (
           <>
             <p>
-              {place.name} · {place.region}
+              {formatLocationLabel(place)}
             </p>
-            {place.provider === 'OpenStreetMap' && <small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></small>}
             <p>{t.soil}: {soils[['Black','Red','Sandy','Alluvial','Mountain'].indexOf(soil)] || soil}</p>
           </>
         ) : (
@@ -288,9 +295,15 @@ export default function YieldPage() {
           )}
 
           {recentRain !== null && (
-            <p>
-              {t.rain}: {recentRain.toFixed(1)} mm
-            </p>
+            <>
+              <p>
+                {t.rain}: {recentRain.toFixed(1)} mm
+              </p>
+              <p className="inline-data-source">
+                {credits.weatherDataBy}{' '}
+                <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
+              </p>
+            </>
           )}
         </div>
       </section>

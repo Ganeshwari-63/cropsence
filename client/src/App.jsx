@@ -11,6 +11,7 @@ import CropPage from './CropPage.jsx'
 import YieldPage from './YieldPage.jsx'
 import DiseasePage from './DiseasePage.jsx'
 import { useLanguage } from './locales/LanguageContext.jsx'
+import { sourceCredits } from './locales/sourceCredits.js'
 
 const tools = [
   {
@@ -282,7 +283,8 @@ function FeaturesPage() {
 }
 
 function AboutPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const credits = sourceCredits[language] || sourceCredits.en
   const steps = ['stepOne', 'stepTwo', 'stepThree']
 
   return (
@@ -323,6 +325,46 @@ function AboutPage() {
         <span className="disclaimer-icon" aria-hidden="true">✓</span>
         <p>{t('disclaimer')}</p>
       </aside>
+
+      <section className="about-credits" aria-labelledby="about-credits-title">
+        <h2 id="about-credits-title">{credits.title}</h2>
+        <ul>
+          <li>
+            {credits.weatherData}{' '}
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.{' '}
+            {credits.weatherFormatting} {credits.license}{' '}
+            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.
+          </li>
+          <li>
+            {credits.placeSearch}{' '}
+            <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noreferrer">Open-Meteo Geocoding</a>;{' '}
+            {credits.geonamesNote}{' '}
+            <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>{' '}
+            (<a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noreferrer">CC BY-NC 4.0</a>).
+          </li>
+          <li>
+            {credits.reverseLookup}{' '}
+            <a href="https://nominatim.org/" target="_blank" rel="noreferrer">Nominatim</a>.{' '}
+            {credits.mapData}{' '}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>{' '}
+            (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL 1.0</a>).
+          </li>
+          <li>
+            {credits.pinLookup}{' '}
+            <a href="https://pincodeapi.in/terms/" target="_blank" rel="noreferrer">PincodeAPI.in</a>,{' '}
+            <a href="https://api.postalpincode.in/" target="_blank" rel="noreferrer">PostalPincode.in</a>.{' '}
+            {credits.pinNote}
+          </li>
+          <li>
+            {credits.leafCheck}{' '}
+            <a href="https://ai.google.dev/gemini-api/docs" target="_blank" rel="noreferrer">Google Gemini API</a>.
+          </li>
+          <li>
+            {credits.cropReference}{' '}
+            <a href="https://icar.gov.in/sites/default/files/Circulars/ICAR-En-Kharif-Agro-Advisories-for-Farmers-2025.pdf" target="_blank" rel="noreferrer">ICAR Kharif Agro-Advisories for Farmers 2025</a>.
+          </li>
+        </ul>
+      </section>
     </main>
   )
 }

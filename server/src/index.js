@@ -88,19 +88,36 @@ app.get('/api/reverse-geocode', async (request, response) => {
     return response.status(400).json({ error: 'Valid coordinates are required.' })
   }
   const language = ['en','hi','kn','ta','te','ml','bn','mr','pa'].includes(request.query.language) ? request.query.language : 'en'
-  const cacheKey = `${latitude.toFixed(3)}:${longitude.toFixed(3)}:${language}`
+  const cacheKey = `v3:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${language}`
   const cached = reverseGeocodeCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) return response.json(cached.value)
   try {
     const url = new URL('https://nominatim.openstreetmap.org/reverse')
+    // City-level results avoid showing only a directional neighborhood such as “Bangalore South”.
     url.search = new URLSearchParams({ format: 'jsonv2', lat: String(latitude), lon: String(longitude), zoom: '10', addressdetails: '1' }).toString()
     await queueNominatimRequest()
     const upstream = await fetch(url, { headers: { 'User-Agent': 'CropSense/1.0 (location display)', 'Accept-Language': language }, signal: AbortSignal.timeout(7000) })
     if (!upstream.ok) throw new Error('Reverse geocoding unavailable')
     const data = await upstream.json()
     const address = data.address || {}
-    const name = address.village || address.town || address.city || address.municipality || address.suburb || address.county || 'Current location'
-    const region = [address.state_district || address.county, address.state, address.country].filter(Boolean).filter((item, index, all) => all.indexOf(item) === index).join(', ')
+    const localityName = [
+      address.city,
+      address.town,
+      address.village,
+      address.municipality,
+      address.hamlet,
+      address.locality,
+      address.suburb,
+      address.neighbourhood,
+      address.quarter,
+    ].find((value) => typeof value === 'string' && value.trim() && !/(?:^|\s)(?:north|south|east|west)$/i.test(value.trim()))
+    const placeTypes = new Set(['city', 'town', 'village', 'hamlet', 'suburb', 'neighbourhood', 'quarter', 'locality', 'municipality', 'isolated_dwelling'])
+    const resultName = placeTypes.has(data.addresstype) && typeof data.name === 'string' && !/(?:^|\s)(?:north|south|east|west)$/i.test(data.name.trim()) ? data.name.trim() : ''
+    const broaderName = [address.city_district, address.state_district, address.district, address.county]
+      .find((value) => typeof value === 'string' && value.trim() && !/(?:^|\s)(?:north|south|east|west)$/i.test(value.trim()))
+    const name = localityName || resultName || broaderName
+    if (!name) throw new Error('A nearby locality is not available in the map data.')
+    const region = [address.state, address.country].filter(Boolean).filter((item, index, all) => all.indexOf(item) === index).join(', ')
     const value = { name, region }
     reverseGeocodeCache.set(cacheKey, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 })
     if (reverseGeocodeCache.size > 5000) reverseGeocodeCache.delete(reverseGeocodeCache.keys().next().value)

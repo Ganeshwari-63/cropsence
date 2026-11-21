@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLanguage } from './locales/LanguageContext.jsx'
 import { weatherTranslations } from './locales/weather.js'
 import { weatherFeatureText, weatherErrors, featureText, cropNames } from './locales/featureText.js'
-import { findLocation, formatLocationLabel, nameCoordinates } from './locationService.js'
+import { findLocation, formatLocationLabel, getDevicePosition, nameCoordinates } from './locationService.js'
 
 const dateLocales = {
   en: 'en-IN',
@@ -51,9 +51,16 @@ export default function WeatherPage() {
       const localized = { ...place, ...named }
       setPlace(localized)
       localStorage.setItem('cropsense-location', JSON.stringify(localized))
-    }).catch(() => {})
+    }).catch(() => {
+      if (!active || place.provider !== 'OpenStreetMap') return
+      if (place.name === common.location && !place.region) return
+      const fallback = { ...place, name: common.location, region: '' }
+      setPlace(fallback)
+      localStorage.setItem('cropsense-location', JSON.stringify(fallback))
+      setError(common.locationError)
+    })
     return () => { active = false }
-  }, [place, language])
+  }, [place, language, common.location, common.locationError])
 
   function savePlace(newPlace) {
     setPlace(newPlace)
@@ -89,23 +96,21 @@ export default function WeatherPage() {
 
     setLoading(true)
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords
+    getDevicePosition()
+      .then(async ({ coords }) => {
+        const { latitude, longitude } = coords
         try {
           const named = await nameCoordinates(latitude, longitude, language)
           savePlace({ ...named, latitude, longitude })
         } catch {
-          savePlace({ name: common.location, region: `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`, latitude, longitude })
-        } finally {
-          setLoading(false)
+          savePlace({ name: common.location, region: '', latitude, longitude, provider: 'Device GPS' })
+          setError(common.locationError)
         }
-      },
-      () => {
-        setError(common.permission)
-        setLoading(false)
-      }
-    )
+      })
+      .catch((locationError) => {
+        setError(locationError?.code === 1 ? common.permission : common.geoUnavailable)
+      })
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
@@ -195,7 +200,6 @@ export default function WeatherPage() {
               ? formatLocationLabel(place)
               : text.locationHint}
           </p>
-          {place?.provider === 'OpenStreetMap' && <small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></small>}
         </div>
 
         <button
@@ -296,7 +300,7 @@ export default function WeatherPage() {
               <option value="">{extra.chooseCrop}</option>
               {[...cropOptions, 'Other'].map((crop, index) => <option key={crop} value={crop}>{crop === 'Other' ? extra.other : (cropNames[language] || cropNames.en)[index]}</option>)}
             </select>
-            {!currentCrop && <p>{extra.noCrop} (<a href="https://icar.gov.in/en/node/10817" target="_blank" rel="noreferrer">ICAR</a>)</p>}
+            {!currentCrop && <p>{extra.noCrop}</p>}
 
             <article className="advice-card">
               <h3>{text.irrigation}</h3>
@@ -318,7 +322,8 @@ export default function WeatherPage() {
 
           <p className="weather-note">
             {text.previousRainfall}: {pastRainfall.toFixed(1)} mm.{' '}
-            {text.dataSource} {extra.adviceNote} (<a href="https://icar.gov.in/en/node/10817" target="_blank" rel="noreferrer">ICAR</a>)
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">{text.dataSource}</a>{' '}
+            {extra.adviceNote}
           </p>
         </>
       )}
