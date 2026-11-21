@@ -169,9 +169,10 @@ function Header() {
   return (
     <header className="site-header">
       <Link className="brand" to="/" aria-label={`CropSense · ${t('home')}`}>
-        <span className="brand-mark" aria-hidden="true">
-          <CropIllustration />
-        </span>
+        <picture className="brand-art" aria-hidden="true">
+          <source media="(max-width: 680px)" srcSet="/cropsense-mark.png?v=1" />
+          <img src="/cropsense-logo.png?v=1" alt="" />
+        </picture>
         <span className="brand-copy">
           <strong>CropSense</strong>
           <small>{t('tagline')}</small>
