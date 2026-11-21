@@ -14,17 +14,110 @@ const clientIndexPath = path.join(clientDistPath, 'index.html')
 const app = express()
 const port = Number(process.env.PORT || 8787)
 
+app.disable('x-powered-by')
+const proxyHops = Number(process.env.TRUST_PROXY_HOPS || 0)
+if (Number.isInteger(proxyHops) && proxyHops >= 0) app.set('trust proxy', proxyHops)
+
+app.use((request, response, next) => {
+  response.setHeader('X-Content-Type-Options', 'nosniff')
+  response.setHeader('X-Frame-Options', 'DENY')
+  response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()')
+  response.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  if (process.env.NODE_ENV === 'production') {
+    response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    response.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
+  }
+  next()
+})
+
+const allowedOrigins = new Set(
+  (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+)
+
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    origin(origin, callback) {
+      callback(null, !origin || allowedOrigins.has(origin))
+    },
+    credentials: false,
   })
 )
 
+const rateBuckets = new Map()
+function rateLimit({ scope, limit, windowMs }) {
+  return (request, response, next) => {
+    const now = Date.now()
+    const address = request.ip || request.socket.remoteAddress || 'unknown'
+    const key = `${scope}:${address}`
+    const times = (rateBuckets.get(key) || []).filter((time) => now - time < windowMs)
+    if (times.length >= limit) {
+      response.setHeader('Retry-After', String(Math.ceil(windowMs / 1000)))
+      return response.status(429).json({ error: 'Too many requests. Please wait and try again.' })
+    }
+    times.push(now)
+    rateBuckets.set(key, times)
+    if (rateBuckets.size > 10000) {
+      for (const [address, entries] of rateBuckets) {
+        if (entries.every((time) => now - time >= windowMs)) rateBuckets.delete(address)
+      }
+    }
+    next()
+  }
+}
+
+app.use('/api', rateLimit({ scope: 'api', limit: 120, windowMs: 60_000 }))
 app.use(express.json({ limit: '6mb' }))
+app.use('/api/reverse-geocode', rateLimit({ scope: 'reverse-geocode', limit: 30, windowMs: 60_000 }))
+app.use('/api/pincode', rateLimit({ scope: 'pincode', limit: 30, windowMs: 60_000 }))
 
 app.get('/api/health', (_request, response) => {
   response.json({ ok: true, service: 'CropSense API' })
 })
+
+app.get('/api/reverse-geocode', async (request, response) => {
+  const latitude = Number(request.query.latitude)
+  const longitude = Number(request.query.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return response.status(400).json({ error: 'Valid coordinates are required.' })
+  }
+  const language = ['en','hi','kn','ta','te','ml','bn','mr','pa'].includes(request.query.language) ? request.query.language : 'en'
+  const cacheKey = `${latitude.toFixed(3)}:${longitude.toFixed(3)}:${language}`
+  const cached = reverseGeocodeCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return response.json(cached.value)
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse')
+    url.search = new URLSearchParams({ format: 'jsonv2', lat: String(latitude), lon: String(longitude), zoom: '10', addressdetails: '1' }).toString()
+    await queueNominatimRequest()
+    const upstream = await fetch(url, { headers: { 'User-Agent': 'CropSense/1.0 (location display)', 'Accept-Language': language }, signal: AbortSignal.timeout(7000) })
+    if (!upstream.ok) throw new Error('Reverse geocoding unavailable')
+    const data = await upstream.json()
+    const address = data.address || {}
+    const name = address.village || address.town || address.city || address.municipality || address.suburb || address.county || 'Current location'
+    const region = [address.state_district || address.county, address.state, address.country].filter(Boolean).filter((item, index, all) => all.indexOf(item) === index).join(', ')
+    const value = { name, region }
+    reverseGeocodeCache.set(cacheKey, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 })
+    if (reverseGeocodeCache.size > 5000) reverseGeocodeCache.delete(reverseGeocodeCache.keys().next().value)
+    return response.json(value)
+  } catch {
+    return response.status(502).json({ error: 'Could not resolve your location name.' })
+  }
+})
+
+const reverseGeocodeCache = new Map()
+let nextNominatimRequestAt = 0
+async function queueNominatimRequest() {
+  const now = Date.now()
+  const waitMs = Math.max(0, nextNominatimRequestAt - now)
+  nextNominatimRequestAt = Math.max(now, nextNominatimRequestAt) + 1000
+  if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs))
+}
 
 app.get('/api/pincode/:code', async (request, response) => {
   const pincode = String(request.params.code || '').trim()
@@ -138,27 +231,6 @@ app.get('/api/pincode/:code', async (request, response) => {
   })
 })
 
-// Allow up to 8 leaf checks per minute from each browser address.
-const requestTimes = new Map()
-
-function limitLeafRequests(request, response, next) {
-  const now = Date.now()
-  const address = request.ip || 'unknown'
-  const recentTimes = (requestTimes.get(address) || []).filter(
-    (time) => now - time < 60_000
-  )
-
-  if (recentTimes.length >= 8) {
-    return response.status(429).json({
-      error: 'Too many photo checks. Wait a minute, then try again.',
-    })
-  }
-
-  recentTimes.push(now)
-  requestTimes.set(address, recentTimes)
-  next()
-}
-
 const resultSchema = {
   type: 'OBJECT',
   properties: {
@@ -190,7 +262,7 @@ const resultSchema = {
   ],
 }
 
-app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
+app.post('/api/analyze-leaf', rateLimit({ scope: 'analyze-leaf', limit: 8, windowMs: 60_000 }), async (request, response) => {
   const apiKey = process.env.GEMINI_API_KEY
 
   if (!apiKey) {
@@ -199,17 +271,28 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
     })
   }
 
-  const { image, mimeType } = request.body || {}
+  const { image, mimeType, language = 'en' } = request.body || {}
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
 
   if (
     typeof image !== 'string' ||
     image.length > 5_500_000 ||
-    !allowedTypes.includes(mimeType)
+    !allowedTypes.includes(mimeType) ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(image)
   ) {
     return response.status(400).json({
       error: 'Choose a JPEG, PNG, or WebP leaf photo smaller than 4 MB.',
     })
+  }
+
+  const imageBytes = Buffer.from(image, 'base64')
+  const validSignature = mimeType === 'image/jpeg'
+    ? imageBytes[0] === 0xff && imageBytes[1] === 0xd8 && imageBytes[2] === 0xff
+    : mimeType === 'image/png'
+      ? imageBytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      : imageBytes.toString('ascii', 0, 4) === 'RIFF' && imageBytes.toString('ascii', 8, 12) === 'WEBP'
+  if (imageBytes.length > 4 * 1024 * 1024 || !validSignature) {
+    return response.status(400).json({ error: 'Choose a valid JPEG, PNG, or WebP image smaller than 4 MB.' })
   }
 
   const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
@@ -218,6 +301,7 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
     `${model}:generateContent`
 
   try {
+    const responseLanguages = { en: 'English', hi: 'Hindi (हिन्दी)', kn: 'Kannada (ಕನ್ನಡ)', ta: 'Tamil (தமிழ்)', te: 'Telugu (తెలుగు)', ml: 'Malayalam (മലയാളം)', bn: 'Bengali (বাংলা)', mr: 'Marathi (मराठी)', pa: 'Punjabi (ਪੰਜਾਬੀ)' }
     const geminiResponse = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -229,7 +313,7 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
           parts: [
             {
               text:
-                'You are a cautious plant health assistant for Indian farmers. ' +
+                `You are a cautious plant health assistant for Indian farmers. Respond entirely in ${responseLanguages[language] || 'English'}, using its native script, including crop and disease names, symptoms, advice, and the expert note. ` +
                 'Use simple language. Never claim certainty. If the photo does ' +
                 'not clearly show a crop leaf, set status to unclear. Confidence ' +
                 'must be a number from 0 to 1. Give practical, safe first steps. ' +
@@ -310,9 +394,9 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
       : 'unclear'
 
     response.json({
-      crop: String(result.crop || 'Not identified'),
+      crop: String(result.crop || ''),
       status,
-      disease_name: String(result.disease_name || 'Unclear'),
+      disease_name: String(result.disease_name || ''),
       confidence: Math.max(0, Math.min(1, Number(result.confidence) || 0)),
       symptoms_seen: Array.isArray(result.symptoms_seen)
         ? result.symptoms_seen.map(String).slice(0, 8)
@@ -320,10 +404,7 @@ app.post('/api/analyze-leaf', limitLeafRequests, async (request, response) => {
       simple_advice: Array.isArray(result.simple_advice)
         ? result.simple_advice.map(String).slice(0, 8)
         : [],
-      when_to_call_expert: String(
-        result.when_to_call_expert ||
-          'Contact a local agriculture expert if the plant continues to worsen.'
-      ),
+      when_to_call_expert: String(result.when_to_call_expert || ''),
     })
   } catch (error) {
     console.error('Leaf photo analysis failed:', error.message)
@@ -351,6 +432,18 @@ if (existsSync(clientIndexPath)) {
     })
   })
 }
+
+app.use('/api', (_request, response) => {
+  response.status(404).json({ error: 'API endpoint not found.' })
+})
+
+app.use((error, _request, response, _next) => {
+  const status = Number(error.status) || 500
+  response.status(status >= 400 && status < 600 ? status : 500).json({
+    error: status === 413 ? 'Request is too large.' : 'The request could not be completed.',
+  })
+})
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`CropSense server is running on port ${port}`)
 })

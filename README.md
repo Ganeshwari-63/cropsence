@@ -52,3 +52,16 @@ Vite forwards `/api` requests to the local API. Keep both terminals open while u
 ## Media
 
 The rice-field and feature videos are in `client/public/videos/`. The files are included with the project.
+
+## Publish on Render
+
+The included `render.yaml` deploys the website and API as one Node service. This keeps photo analysis behind the server, where the Gemini key is stored, and serves the site and API from one HTTPS origin.
+
+1. Push this repository to the GitHub account you want to deploy from.
+2. In Render, choose **New → Blueprint** and connect the repository.
+3. Review the `cropsense` service. Add your Gemini API key as the `GEMINI_API_KEY` secret when prompted; do not add it to a source file.
+4. Deploy. Render builds the client, starts the API, and checks `/api/health` before routing traffic.
+
+Render assigns a public `onrender.com` address and provides HTTPS. The Blueprint uses the free plan to avoid setting up a paid service automatically. Free services pause after 15 minutes without traffic and can take about a minute to start again. Render describes free instances as suitable for previews and hobby projects, not production. For an always-on public launch, select a paid service plan after reviewing the current price and usage terms. Render's current free plan also supports custom domains.
+
+The public service enables browser security headers, HTTPS-only transport in production, same-origin API calls, request-size validation, and per-address rate limits. `TRUST_PROXY_HOPS=1` is set for Render's reverse proxy. If you host somewhere else, set `TRUST_PROXY_HOPS` and `CLIENT_ORIGINS` for that provider and your exact site origin.

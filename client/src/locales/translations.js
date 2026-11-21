@@ -12,6 +12,8 @@ export const supportedLanguages = [
 
 export const translations = {
   en: {
+    navLabel: 'Main navigation',
+    chooseLanguage: 'Choose language',
     home: 'Home',
     features: 'Features',
     about: 'About',
@@ -51,6 +53,8 @@ export const translations = {
   },
 
   hi: {
+    navLabel: 'मुख्य नेविगेशन',
+    chooseLanguage: 'भाषा चुनें',
     home: 'होम',
     features: 'सुविधाएँ',
     about: 'हमारे बारे में',
@@ -90,6 +94,8 @@ export const translations = {
   },
 
   kn: {
+    navLabel: 'ಮುಖ್ಯ ನ್ಯಾವಿಗೇಶನ್',
+    chooseLanguage: 'ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ',
     home: 'ಮುಖಪುಟ',
     features: 'ವೈಶಿಷ್ಟ್ಯಗಳು',
     about: 'ನಮ್ಮ ಬಗ್ಗೆ',
@@ -129,6 +135,8 @@ export const translations = {
   },
 
   ta: {
+    navLabel: 'முதன்மை வழிசெலுத்தல்',
+    chooseLanguage: 'மொழியைத் தேர்ந்தெடுக்கவும்',
     home: 'முகப்பு',
     features: 'அம்சங்கள்',
     about: 'எங்களைப் பற்றி',
@@ -168,6 +176,8 @@ export const translations = {
   },
 
   te: {
+    navLabel: 'ప్రధాన నావిగేషన్',
+    chooseLanguage: 'భాషను ఎంచుకోండి',
     home: 'హోమ్',
     features: 'విశేషాలు',
     about: 'మా గురించి',
@@ -207,6 +217,8 @@ export const translations = {
   },
 
   ml: {
+    navLabel: 'പ്രധാന നാവിഗേഷൻ',
+    chooseLanguage: 'ഭാഷ തിരഞ്ഞെടുക്കുക',
     home: 'ഹോം',
     features: 'സവിശേഷതകൾ',
     about: 'ഞങ്ങളെക്കുറിച്ച്',
@@ -246,6 +258,8 @@ export const translations = {
   },
 
   bn: {
+    navLabel: 'প্রধান নেভিগেশন',
+    chooseLanguage: 'ভাষা বেছে নিন',
     home: 'হোম',
     features: 'বৈশিষ্ট্য',
     about: 'পরিচিতি',
@@ -285,6 +299,8 @@ export const translations = {
   },
 
   mr: {
+    navLabel: 'मुख्य नेव्हिगेशन',
+    chooseLanguage: 'भाषा निवडा',
     home: 'मुख्यपृष्ठ',
     features: 'वैशिष्ट्ये',
     about: 'आमच्याबद्दल',
@@ -324,6 +340,8 @@ export const translations = {
   },
 
   pa: {
+    navLabel: 'ਮੁੱਖ ਰਾਹ-ਨੇਵੀਗੇਸ਼ਨ',
+    chooseLanguage: 'ਭਾਸ਼ਾ ਚੁਣੋ',
     home: 'ਮੁੱਖ ਪੰਨਾ',
     features: 'ਖਾਸੀਅਤਾਂ',
     about: 'ਸਾਡੇ ਬਾਰੇ',

@@ -165,7 +165,7 @@ function Header() {
 
   return (
     <header className="site-header">
-      <Link className="brand" to="/" aria-label="CropSense home">
+      <Link className="brand" to="/" aria-label={`CropSense · ${t('home')}`}>
         <span className="brand-mark" aria-hidden="true">
           <CropIllustration />
         </span>
@@ -175,16 +175,16 @@ function Header() {
         </span>
       </Link>
 
-      <nav className="main-nav" aria-label="Main navigation">
+      <nav className="main-nav" aria-label={t('navLabel')}>
         <Link to="/">{t('home')}</Link>
         <Link to="/features">{t('features')}</Link>
         <Link to="/about">{t('about')}</Link>
       </nav>
 
       <label className="language-picker">
-        <span className="visually-hidden">Choose language</span>
+        <span className="visually-hidden">{t('chooseLanguage')}</span>
         <select
-          aria-label="Choose language"
+          aria-label={t('chooseLanguage')}
           value={language}
           onChange={(event) => setLanguage(event.target.value)}
         >

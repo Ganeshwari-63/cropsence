@@ -31,11 +31,11 @@ function normalizeLocationName(value) {
     .join(', ')
 }
 
-async function geocodeIndia(query) {
+async function geocodeIndia(query, language = 'en') {
   const params = new URLSearchParams({
     name: normalizeLocationName(query),
     count: '10',
-    language: 'en',
+    language,
     format: 'json',
     countryCode: 'IN',
   })
@@ -73,6 +73,7 @@ function makeLocation(result, postalDetails = null) {
     longitude: result.longitude,
     postcode: postalDetails?.postcode || '',
     postOffice: postalDetails?.postOffice || '',
+    provider: postalDetails ? 'India Post' : 'GeoNames',
   }
 }
 
@@ -92,7 +93,7 @@ async function lookupPinCode(pinCode) {
   return data
 }
 
-export async function findLocation(searchText) {
+export async function findLocation(searchText, language = 'en') {
   const query = searchText.trim().replace(/\s+/g, ' ')
 
   if (!query) {
@@ -123,14 +124,17 @@ export async function findLocation(searchText) {
       Number.isFinite(office.latitude) &&
       Number.isFinite(office.longitude)
     ) {
+      let localized = null
+      try { localized = await nameCoordinates(office.latitude, office.longitude, language) } catch { /* Keep the postal service result if reverse lookup is unavailable. */ }
       return {
-        name: office.name.replace(/\s+(?:H\.\s*O|S\.\s*O|B\.\s*O)$/i, '').trim(),
-        region: [office.district, office.state].filter(Boolean).join(', '),
+        name: localized?.name || office.name.replace(/\s+(?:H\.\s*O|S\.\s*O|B\.\s*O)$/i, '').trim(),
+        region: localized?.region || [office.district, office.state].filter(Boolean).join(', '),
         state: office.state || '',
         latitude: office.latitude,
         longitude: office.longitude,
         postcode: query,
         postOffice: office.name,
+        provider: localized?.provider || 'India Post',
       }
     }
 
@@ -141,7 +145,7 @@ export async function findLocation(searchText) {
     ]
 
     for (const searchTerm of [...new Set(searchTerms)]) {
-      const results = await geocodeIndia(searchTerm)
+      const results = await geocodeIndia(searchTerm, language)
 
       if (results.length > 0) {
         return makeLocation(results[0], postalDetails)
@@ -151,7 +155,7 @@ export async function findLocation(searchText) {
     throw new Error('The PIN was found, but its town could not be mapped. Try the nearby town name.')
   }
 
-  const results = await geocodeIndia(query)
+  const results = await geocodeIndia(query, language)
 
   if (results.length === 0) {
     throw new Error('I could not find that Indian town. Try adding its district or state.')
@@ -164,6 +168,12 @@ export async function findLocation(searchText) {
   const result = exactMatch || results[0]
 
   return makeLocation(result)
+}
+
+export async function nameCoordinates(latitude, longitude, language = 'en') {
+  const response = await fetch(`/api/reverse-geocode?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&language=${encodeURIComponent(language)}`)
+  if (!response.ok) throw new Error('Could not resolve your location name.')
+  return { ...(await response.json()), provider: 'OpenStreetMap' }
 }
 
 export function formatLocationLabel(place) {

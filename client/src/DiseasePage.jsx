@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLanguage } from './locales/LanguageContext.jsx'
+import { featureText, photoPreviewText } from './locales/featureText.js'
 
 function makeSmallJpeg(file) {
   return new Promise((resolve, reject) => {
@@ -17,7 +19,7 @@ function makeSmallJpeg(file) {
 
       if (!context) {
         URL.revokeObjectURL(imageUrl)
-        reject(new Error('Your browser could not prepare this photo.'))
+        reject(new Error('photo_prepare'))
         return
       }
 
@@ -27,7 +29,7 @@ function makeSmallJpeg(file) {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            reject(new Error('Your browser could not resize this photo.'))
+            reject(new Error('photo_resize'))
             return
           }
 
@@ -37,7 +39,7 @@ function makeSmallJpeg(file) {
             const dataUrl = reader.result
 
             if (typeof dataUrl !== 'string') {
-              reject(new Error('Your browser could not read this photo.'))
+              reject(new Error('photo_read'))
               return
             }
 
@@ -45,7 +47,7 @@ function makeSmallJpeg(file) {
           }
 
           reader.onerror = () => {
-            reject(new Error('Your browser could not read this photo.'))
+            reject(new Error('photo_read'))
           }
 
           reader.readAsDataURL(blob)
@@ -57,7 +59,7 @@ function makeSmallJpeg(file) {
 
     image.onerror = () => {
       URL.revokeObjectURL(imageUrl)
-      reject(new Error('This photo could not be opened. Try another image.'))
+      reject(new Error('photo_open'))
     }
 
     image.src = imageUrl
@@ -65,25 +67,19 @@ function makeSmallJpeg(file) {
 }
 
 export default function DiseasePage() {
+  const { language } = useLanguage()
+  const t = featureText[language] || featureText.en
   const [file, setFile] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState('')
+  const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : '', [file])
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl('')
-      return
-    }
-
-    const objectUrl = URL.createObjectURL(file)
-    setPreviewUrl(objectUrl)
-
     return () => {
-      URL.revokeObjectURL(objectUrl)
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
-  }, [file])
+  }, [previewUrl])
 
   function choosePhoto(event) {
     const chosenFile = event.target.files?.[0]
@@ -91,13 +87,13 @@ export default function DiseasePage() {
     if (!chosenFile) return
 
     if (!chosenFile.type.startsWith('image/')) {
-      setError('Please choose an image file.')
+      setError(t.photoType)
       setFile(null)
       return
     }
 
     if (chosenFile.size > 15 * 1024 * 1024) {
-      setError('Please choose a photo smaller than 15 MB.')
+      setError(t.photoSize)
       setFile(null)
       return
     }
@@ -109,7 +105,7 @@ export default function DiseasePage() {
 
   async function analyzePhoto() {
     if (!file) {
-      setError('Take or upload a leaf photo first.')
+      setError(t.photoFirst)
       return
     }
 
@@ -128,23 +124,20 @@ export default function DiseasePage() {
         body: JSON.stringify({
           image,
           mimeType: 'image/jpeg',
+          language,
         }),
       })
 
       const responseData = await response.json().catch(() => null)
 
       if (!response.ok) {
-        throw new Error(
-          responseData?.error ||
-            'The leaf analysis service is not connected. We will set it up in the server steps.'
-        )
+        throw new Error(t.serviceError)
       }
 
       setResult(responseData)
-    } catch (requestError) {
+    } catch {
       setError(
-        requestError.message ||
-          'The photo could not be checked. Please try again.'
+          t.photoError
       )
     } finally {
       setLoading(false)
@@ -154,18 +147,15 @@ export default function DiseasePage() {
   return (
     <main className="disease-page">
       <section className="disease-heading">
-        <p className="section-label">LEAF PHOTO CHECK</p>
-        <h1>Check a crop leaf</h1>
-        <p>
-          Use a clear photo in daylight. This is a first check, not a confirmed
-          diagnosis.
-        </p>
+        <p className="section-label">{t.diseaseTitle}</p>
+        <h1>{t.diseaseTitle}</h1>
+        <p>{t.diseaseIntro}</p>
       </section>
 
       <section className="photo-card">
         <div className="photo-buttons">
           <label className="secondary-button" htmlFor="leaf-camera">
-            Take a photo
+            {t.takePhoto}
           </label>
 
           <input
@@ -178,7 +168,7 @@ export default function DiseasePage() {
           />
 
           <label className="secondary-button" htmlFor="leaf-upload">
-            Choose a photo
+            {t.choosePhoto}
           </label>
 
           <input
@@ -194,7 +184,7 @@ export default function DiseasePage() {
           <img
             className="leaf-photo-preview"
             src={previewUrl}
-            alt="Preview of the selected crop leaf photo"
+            alt={photoPreviewText[language] || photoPreviewText.en}
           />
         )}
 
@@ -206,7 +196,7 @@ export default function DiseasePage() {
           onClick={analyzePhoto}
           disabled={!file || loading}
         >
-          {loading ? 'Checking the photo…' : 'Analyze leaf photo'}
+          {loading ? t.analyzing : t.analyze}
         </button>
 
         {error && (
@@ -220,22 +210,22 @@ export default function DiseasePage() {
             className={`analysis-result ${result.status || 'unclear'}`}
             aria-live="polite"
           >
-            <p className="section-label">FIRST CHECK RESULT</p>
-            <h2>{result.disease_name || 'Leaf check'}</h2>
+            <p className="section-label">{t.firstResult}</p>
+            <h2>{result.disease_name || t.noDisease}</h2>
             <p>
-              Crop: {result.crop || 'Not identified'} · Status:{' '}
-              {(result.status || 'unclear').replaceAll('_', ' ')}
+              {t.crop}: {result.crop || t.notIdentified} · {t.status}:{' '}
+              {t[result.status || 'unclear'] || t.unclear}
             </p>
 
             {typeof result.confidence === 'number' && (
               <p>
-                Confidence: {Math.round(result.confidence * 100)}%
+                {t.confidence}: {Math.round(result.confidence * 100)}%
               </p>
             )}
 
             {result.symptoms_seen?.length > 0 && (
               <>
-                <h3>What was noticed</h3>
+                <h3>{t.noticed}</h3>
                 <ul>
                   {result.symptoms_seen.map((symptom) => (
                     <li key={symptom}>{symptom}</li>
@@ -246,7 +236,7 @@ export default function DiseasePage() {
 
             {result.simple_advice?.length > 0 && (
               <>
-                <h3>Simple next steps</h3>
+                <h3>{t.nextSteps}</h3>
                 <ul>
                   {result.simple_advice.map((tip) => (
                     <li key={tip}>{tip}</li>
@@ -255,15 +245,12 @@ export default function DiseasePage() {
               </>
             )}
 
-            {result.when_to_call_expert && (
-              <p>{result.when_to_call_expert}</p>
-            )}
+            <p>{result.when_to_call_expert || t.expert}</p>
           </section>
         )}
 
         <p className="disease-notice">
-          First check only. Confirm with an agriculture expert before treating
-          your crop.
+          {t.notice}
         </p>
       </section>
     </main>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from './locales/LanguageContext.jsx'
 import { weatherTranslations } from './locales/weather.js'
-import { findLocation, formatLocationLabel } from './locationService.js'
+import { weatherFeatureText, weatherErrors, featureText, cropNames } from './locales/featureText.js'
+import { findLocation, formatLocationLabel, nameCoordinates } from './locationService.js'
 
 const dateLocales = {
   en: 'en-IN',
@@ -27,6 +28,8 @@ function readSavedLocation() {
 export default function WeatherPage() {
   const { language } = useLanguage()
   const text = weatherTranslations[language] || weatherTranslations.en
+  const extra = weatherFeatureText[language] || weatherFeatureText.en
+  const common = featureText[language] || featureText.en
   const dateLocale = dateLocales[language] || 'en-IN'
 
   const [searchText, setSearchText] = useState('')
@@ -34,8 +37,23 @@ export default function WeatherPage() {
   const [weatherResult, setWeatherResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [currentCrop, setCurrentCrop] = useState('')
+  const cropOptions = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane', 'Groundnut', 'Soybean', 'Ragi', 'Jowar', 'Tur', 'Gram', 'Mustard', 'Potato', 'Tomato', 'Onion', 'Okra', 'Brinjal', 'Chilli', 'Banana', 'Mango', 'Papaya']
+  const selectedCropName = currentCrop === 'Other' ? extra.other : (cropNames[language] || cropNames.en)[cropOptions.indexOf(currentCrop)]
   const placeKey = place ? `${place.latitude},${place.longitude}` : ''
   const weather = weatherResult?.placeKey === placeKey ? weatherResult.data : null
+
+  useEffect(() => {
+    if (!place) return
+    let active = true
+    nameCoordinates(place.latitude, place.longitude, language).then((named) => {
+      if (!active || (named.name === place.name && named.region === place.region)) return
+      const localized = { ...place, ...named }
+      setPlace(localized)
+      localStorage.setItem('cropsense-location', JSON.stringify(localized))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [place, language])
 
   function savePlace(newPlace) {
     setPlace(newPlace)
@@ -51,11 +69,11 @@ export default function WeatherPage() {
     setError('')
 
     try {
-      const foundPlace = await findLocation(searchText)
+      const foundPlace = await findLocation(searchText, language)
       savePlace(foundPlace)
       setSearchText('')
-    } catch (searchError) {
-      setError(searchError.message || 'Place search failed. Please try again.')
+    } catch {
+      setError(common.notFound)
     } finally {
       setLoading(false)
     }
@@ -65,26 +83,26 @@ export default function WeatherPage() {
     setError('')
 
     if (!navigator.geolocation) {
-      setError('Location access is not available in this browser.')
+      setError(common.geoUnavailable)
       return
     }
 
     setLoading(true)
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        savePlace({
-          name: 'Your location',
-          region: 'Using your device location',
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        })
-        setLoading(false)
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        try {
+          const named = await nameCoordinates(latitude, longitude, language)
+          savePlace({ ...named, latitude, longitude })
+        } catch {
+          savePlace({ name: common.location, region: `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`, latitude, longitude })
+        } finally {
+          setLoading(false)
+        }
       },
       () => {
-        setError(
-          'Location permission was not given. You can search for a town or PIN code instead.'
-        )
+        setError(common.permission)
         setLoading(false)
       }
     )
@@ -119,16 +137,16 @@ export default function WeatherPage() {
           })
         }
       })
-      .catch((weatherError) => {
+      .catch(() => {
         if (stillOnThisPage) {
-          setError(weatherError.message || 'Could not load the weather.')
+          setError(weatherErrors[language] || weatherErrors.en)
         }
       })
 
     return () => {
       stillOnThisPage = false
     }
-  }, [place, placeKey])
+  }, [place, placeKey, language])
 
   const forecastDays =
     weather?.daily?.time?.slice(-5).map((date, index) => {
@@ -177,6 +195,7 @@ export default function WeatherPage() {
               ? formatLocationLabel(place)
               : text.locationHint}
           </p>
+          {place?.provider === 'OpenStreetMap' && <small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></small>}
         </div>
 
         <button
@@ -272,28 +291,34 @@ export default function WeatherPage() {
 
           <section className="field-advice">
             <h2>{text.fieldTips}</h2>
+            <label htmlFor="weather-crop">{extra.currentCrop}</label>
+            <select id="weather-crop" value={currentCrop} onChange={(event) => setCurrentCrop(event.target.value)}>
+              <option value="">{extra.chooseCrop}</option>
+              {[...cropOptions, 'Other'].map((crop, index) => <option key={crop} value={crop}>{crop === 'Other' ? extra.other : (cropNames[language] || cropNames.en)[index]}</option>)}
+            </select>
+            {!currentCrop && <p>{extra.noCrop} (<a href="https://icar.gov.in/en/node/10817" target="_blank" rel="noreferrer">ICAR</a>)</p>}
 
             <article className="advice-card">
               <h3>{text.irrigation}</h3>
-              <p>{delayWatering ? text.rainExpected : text.checkSoil}</p>
+              <p>{currentCrop ? `${selectedCropName}: ${delayWatering ? extra.irrigation.replace('{mm}', nextTwoDaysRainfall.toFixed(1)) : extra.noRain}` : text.checkSoil}</p>
             </article>
 
             <article className="advice-card">
               <h3>{text.spraying}</h3>
-              <p>{avoidSpraying ? text.waitSpraying : text.calmSpraying}</p>
+              <p>{currentCrop ? `${selectedCropName}: ${avoidSpraying ? extra.sprayRain : extra.sprayDry}` : text.waitSpraying}</p>
             </article>
 
             <article className="advice-card">
               <h3>{text.harvesting}</h3>
               <p>
-                {todayRainChance > 50 ? text.dryWindow : text.checkForecast}
+                {currentCrop ? `${selectedCropName}: ${todayRainChance > 50 ? extra.harvestRain : extra.harvestDry}` : text.checkForecast}
               </p>
             </article>
           </section>
 
           <p className="weather-note">
             {text.previousRainfall}: {pastRainfall.toFixed(1)} mm.{' '}
-            {text.dataSource}
+            {text.dataSource} {extra.adviceNote} (<a href="https://icar.gov.in/en/node/10817" target="_blank" rel="noreferrer">ICAR</a>)
           </p>
         </>
       )}

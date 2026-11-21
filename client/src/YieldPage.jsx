@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from './locales/LanguageContext.jsx'
+import { yieldText, cropNames, soilNames } from './locales/featureText.js'
+import { nameCoordinates } from './locationService.js'
 
 const crops = [
   { name: 'Rice', icon: '🌾', yieldPerAcre: 18, soils: ['Alluvial', 'Red', 'Laterite'], minRain: 100, maxRain: 900 },
@@ -64,13 +67,29 @@ function guessSoil(stateName = '') {
 }
 
 export default function YieldPage() {
-  const [place] = useState(readSavedLocation)
+  const { language } = useLanguage()
+  const t = yieldText[language] || yieldText.en
+  const names = cropNames[language] || cropNames.en
+  const soils = soilNames[language] || soilNames.en
+  const [place, setPlace] = useState(readSavedLocation)
   const [weather, setWeather] = useState(null)
   const [selectedCrop, setSelectedCrop] = useState(crops[0])
   const [area, setArea] = useState(1)
   const [unit, setUnit] = useState('acres')
   const [price, setPrice] = useState('')
   const [weatherError, setWeatherError] = useState('')
+
+  useEffect(() => {
+    if (!place) return
+    let active = true
+    nameCoordinates(place.latitude, place.longitude, language).then((named) => {
+      if (!active || (named.name === place.name && named.region === place.region)) return
+      const localized = { ...place, ...named }
+      setPlace(localized)
+      localStorage.setItem('cropsense-location', JSON.stringify(localized))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [place, language])
 
   useEffect(() => {
     if (!place) return
@@ -95,16 +114,16 @@ export default function YieldPage() {
       .then((data) => {
         if (stillOnPage) setWeather(data)
       })
-      .catch((error) => {
+      .catch(() => {
         if (stillOnPage) {
-          setWeatherError(error.message || 'Rainfall data is unavailable.')
+          setWeatherError(t.weatherError)
         }
       })
 
     return () => {
       stillOnPage = false
     }
-  }, [place])
+  }, [place, t.weatherError])
 
   const soil = guessSoil(place?.state || place?.region || '')
   const recentRain =
@@ -138,38 +157,36 @@ export default function YieldPage() {
   return (
     <main className="yield-page">
       <section className="yield-heading">
-        <p className="section-label">HARVEST PLANNING</p>
-        <h1>Yield estimate</h1>
-        <p>
-          Choose a crop and land area to see a planning range for your harvest.
-        </p>
+        <p className="section-label">{t.tag}</p>
+        <h1>{t.title}</h1>
+        <p>{t.intro}</p>
       </section>
 
       <section className="yield-location">
-        <h2>Your location</h2>
+        <h2>{t.location}</h2>
 
         {place ? (
           <>
             <p>
               {place.name} · {place.region}
             </p>
-            <p>Regional soil estimate: {soil}</p>
+            {place.provider === 'OpenStreetMap' && <small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></small>}
+            <p>{t.soil}: {soils[['Black','Red','Sandy','Alluvial','Mountain'].indexOf(soil)] || soil}</p>
           </>
         ) : (
           <p>
-            No location is saved yet. Choose a location on the Weather or Crop
-            page to include local conditions.
+            {t.noLocation}
           </p>
         )}
 
-        <Link to="/weather">Choose a location on the Weather page</Link>
+        <Link to="/weather">{t.weatherLink}</Link>
 
         {weatherError && <p className="error-message">{weatherError}</p>}
       </section>
 
       <section className="yield-controls">
         <div>
-          <h2>Choose a crop</h2>
+          <h2>{t.crop}</h2>
 
           <div className="yield-crop-grid">
             {crops.map((crop) => (
@@ -185,20 +202,20 @@ export default function YieldPage() {
                 aria-pressed={selectedCrop.name === crop.name}
               >
                 <span aria-hidden="true">{crop.icon}</span>
-                {crop.name}
+                {names[crops.indexOf(crop)]}
               </button>
             ))}
           </div>
         </div>
 
         <div className="area-picker">
-          <h2>Land area</h2>
+          <h2>{t.area}</h2>
 
           <div className="area-controls">
             <button
               type="button"
               onClick={() => changeArea(-0.5)}
-              aria-label="Decrease land area"
+              aria-label={t.decrease}
             >
               −
             </button>
@@ -208,7 +225,7 @@ export default function YieldPage() {
             <button
               type="button"
               onClick={() => changeArea(0.5)}
-              aria-label="Increase land area"
+              aria-label={t.increase}
             >
               +
             </button>
@@ -222,14 +239,14 @@ export default function YieldPage() {
                 )
               }
             >
-              {unit}
+              {unit === 'acres' ? t.acres : t.hectares}
             </button>
           </div>
         </div>
 
         <div className="price-picker">
           <label htmlFor="crop-price">
-            Market price per quintal (optional)
+            {t.price}
           </label>
 
           <input
@@ -238,7 +255,7 @@ export default function YieldPage() {
             min="0"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
-            placeholder="For example: 2200"
+            placeholder={t.priceExample}
           />
         </div>
       </section>
@@ -249,22 +266,22 @@ export default function YieldPage() {
         </span>
 
         <div>
-          <p className="section-label">PLANNING ESTIMATE</p>
-          <h2>{selectedCrop.name}</h2>
+          <p className="section-label">{t.estimate}</p>
+          <h2>{names[crops.indexOf(selectedCrop)]}</h2>
 
           <p className="yield-range">
-            {lowEstimate.toFixed(1)}–{highEstimate.toFixed(1)} quintals
+            {lowEstimate.toFixed(1)}–{highEstimate.toFixed(1)} {language === 'hi' ? 'क्विंटल' : language === 'kn' ? 'ಕ್ವಿಂಟಾಲ್' : language === 'ta' ? 'குவிண்டால்' : language === 'te' ? 'క్వింటాళ్లు' : language === 'ml' ? 'ക്വിന്റൽ' : language === 'bn' ? 'কুইন্টাল' : language === 'mr' ? 'क्विंटल' : language === 'pa' ? 'ਕੁਇੰਟਲ' : 'quintals'}
           </p>
 
           <p>
-            Expected: {expectedQuintals.toFixed(1)} quintals ·{' '}
+            {t.expected}: {expectedQuintals.toFixed(1)} ·{' '}
             {expectedKg.toFixed(0)} kg
           </p>
 
           {estimatedIncome !== null && (
             <p className="estimated-income">
-              Approximate gross income: ₹
-              {estimatedIncome.toLocaleString('en-IN', {
+              {t.income}: ₹
+              {estimatedIncome.toLocaleString(language === 'en' ? 'en-IN' : `${language}-IN`, {
                 maximumFractionDigits: 0,
               })}
             </p>
@@ -272,15 +289,14 @@ export default function YieldPage() {
 
           {recentRain !== null && (
             <p>
-              Rain over the previous 30 days: {recentRain.toFixed(1)} mm
+              {t.rain}: {recentRain.toFixed(1)} mm
             </p>
           )}
         </div>
       </section>
 
       <p className="yield-disclaimer">
-        An estimate for planning, not a guarantee. Actual harvests depend on
-        seed, field conditions, water, and farming practices.
+        {t.disclaimer}
       </p>
     </main>
   )
