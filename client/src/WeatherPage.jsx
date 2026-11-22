@@ -3,6 +3,7 @@ import { useLanguage } from './locales/LanguageContext.jsx'
 import { weatherTranslations } from './locales/weather.js'
 import { weatherFeatureText, weatherErrors, featureText, cropNames } from './locales/featureText.js'
 import { findLocation, formatLocationLabel, getDevicePosition, nameCoordinates } from './locationService.js'
+import CropNameInput from './CropNameInput.jsx'
 
 const dateLocales = {
   en: 'en-IN',
@@ -38,8 +39,10 @@ export default function WeatherPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [currentCrop, setCurrentCrop] = useState('')
+  const [otherCrop, setOtherCrop] = useState('')
   const cropOptions = ['Rice', 'Wheat', 'Maize', 'Cotton', 'Sugarcane', 'Groundnut', 'Soybean', 'Ragi', 'Jowar', 'Tur', 'Gram', 'Mustard', 'Potato', 'Tomato', 'Onion', 'Okra', 'Brinjal', 'Chilli', 'Banana', 'Mango', 'Papaya']
-  const selectedCropName = currentCrop === 'Other' ? extra.other : (cropNames[language] || cropNames.en)[cropOptions.indexOf(currentCrop)]
+  const selectedCropName = currentCrop === 'Other' ? otherCrop.trim() : (cropNames[language] || cropNames.en)[cropOptions.indexOf(currentCrop)]
+  const hasCurrentCrop = Boolean(currentCrop && (currentCrop !== 'Other' || selectedCropName))
   const placeKey = place ? `${place.latitude},${place.longitude}` : ''
   const weather = weatherResult?.placeKey === placeKey ? weatherResult.data : null
 
@@ -296,33 +299,47 @@ export default function WeatherPage() {
           <section className="field-advice">
             <h2>{text.fieldTips}</h2>
             <label htmlFor="weather-crop">{extra.currentCrop}</label>
-            <select id="weather-crop" value={currentCrop} onChange={(event) => setCurrentCrop(event.target.value)}>
+            <select
+              id="weather-crop"
+              value={currentCrop}
+              onChange={(event) => {
+                setCurrentCrop(event.target.value)
+                if (event.target.value !== 'Other') setOtherCrop('')
+              }}
+            >
               <option value="">{extra.chooseCrop}</option>
               {[...cropOptions, 'Other'].map((crop, index) => <option key={crop} value={crop}>{crop === 'Other' ? extra.other : (cropNames[language] || cropNames.en)[index]}</option>)}
             </select>
-            {!currentCrop && <p>{extra.noCrop}</p>}
+            {currentCrop === 'Other' && (
+              <CropNameInput
+                id="weather-other-crop"
+                language={language}
+                value={otherCrop}
+                onChange={setOtherCrop}
+              />
+            )}
+            {!hasCurrentCrop && <p>{extra.noCrop}</p>}
 
             <article className="advice-card">
               <h3>{text.irrigation}</h3>
-              <p>{currentCrop ? `${selectedCropName}: ${delayWatering ? extra.irrigation.replace('{mm}', nextTwoDaysRainfall.toFixed(1)) : extra.noRain}` : text.checkSoil}</p>
+              <p>{hasCurrentCrop ? `${selectedCropName}: ${delayWatering ? extra.irrigation.replace('{mm}', nextTwoDaysRainfall.toFixed(1)) : extra.noRain}` : text.checkSoil}</p>
             </article>
 
             <article className="advice-card">
               <h3>{text.spraying}</h3>
-              <p>{currentCrop ? `${selectedCropName}: ${avoidSpraying ? extra.sprayRain : extra.sprayDry}` : text.waitSpraying}</p>
+              <p>{hasCurrentCrop ? `${selectedCropName}: ${avoidSpraying ? extra.sprayRain : extra.sprayDry}` : text.waitSpraying}</p>
             </article>
 
             <article className="advice-card">
               <h3>{text.harvesting}</h3>
               <p>
-                {currentCrop ? `${selectedCropName}: ${todayRainChance > 50 ? extra.harvestRain : extra.harvestDry}` : text.checkForecast}
+                {hasCurrentCrop ? `${selectedCropName}: ${todayRainChance > 50 ? extra.harvestRain : extra.harvestDry}` : text.checkForecast}
               </p>
             </article>
           </section>
 
           <p className="weather-note">
             {text.previousRainfall}: {pastRainfall.toFixed(1)} mm.{' '}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">{text.dataSource}</a>{' '}
             {extra.adviceNote}
           </p>
         </>

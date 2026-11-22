@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from './locales/LanguageContext.jsx'
 import { yieldText, cropNames, soilNames } from './locales/featureText.js'
 import { formatLocationLabel, nameCoordinates } from './locationService.js'
-import { sourceCredits } from './locales/sourceCredits.js'
+import CropNameInput from './CropNameInput.jsx'
+import { cropInputText, yieldOtherText } from './locales/cropInputText.js'
 
 const crops = [
   { name: 'Rice', icon: '🌾', yieldPerAcre: 18, soils: ['Alluvial', 'Red', 'Laterite'], minRain: 100, maxRain: 900 },
@@ -70,12 +71,16 @@ function guessSoil(stateName = '') {
 export default function YieldPage() {
   const { language } = useLanguage()
   const t = yieldText[language] || yieldText.en
+  const cropInput = cropInputText[language] || cropInputText.en
+  const otherText = yieldOtherText[language] || yieldOtherText.en
   const names = cropNames[language] || cropNames.en
   const soils = soilNames[language] || soilNames.en
-  const credits = sourceCredits[language] || sourceCredits.en
   const [place, setPlace] = useState(readSavedLocation)
   const [weather, setWeather] = useState(null)
   const [selectedCrop, setSelectedCrop] = useState(crops[0])
+  const [otherCropSelected, setOtherCropSelected] = useState(false)
+  const [otherCropName, setOtherCropName] = useState('')
+  const [otherYieldRate, setOtherYieldRate] = useState('')
   const [area, setArea] = useState(1)
   const [unit, setUnit] = useState('acres')
   const [price, setPrice] = useState('')
@@ -155,8 +160,26 @@ export default function YieldPage() {
 
   const lowEstimate = expectedQuintals * 0.8
   const highEstimate = expectedQuintals * 1.2
-  const expectedKg = expectedQuintals * 100
-  const estimatedIncome = price ? expectedQuintals * Number(price) : null
+  const customExpectedQuintals = Number(otherYieldRate) > 0
+    ? Number(otherYieldRate) * area
+    : null
+  const resultQuintals = otherCropSelected ? customExpectedQuintals : expectedQuintals
+  const expectedKg = resultQuintals === null ? null : resultQuintals * 100
+  const estimatedIncome = price && resultQuintals !== null ? resultQuintals * Number(price) : null
+  const selectedCropName = otherCropSelected
+    ? otherCropName.trim() || cropInput.other
+    : names[crops.indexOf(selectedCrop)]
+  const quintalLabel = language === 'hi' ? 'क्विंटल' : language === 'kn' ? 'ಕ್ವಿಂಟಾಲ್' : language === 'ta' ? 'குவிண்டால்' : language === 'te' ? 'క్వிண்டాళ్లు' : language === 'ml' ? 'ക്വിന്റൽ' : language === 'bn' ? 'কুইন্টাল' : language === 'mr' ? 'क्विंटल' : language === 'pa' ? 'ਕੁਇੰਟਲ' : 'quintals'
+
+  function toggleAreaUnit() {
+    const nextUnit = unit === 'acres' ? 'hectares' : 'acres'
+    setUnit(nextUnit)
+    setOtherYieldRate((currentRate) => {
+      if (!currentRate) return currentRate
+      const convertedRate = Number(currentRate) * (nextUnit === 'hectares' ? 2.471 : 1 / 2.471)
+      return convertedRate.toFixed(2)
+    })
+  }
 
   function changeArea(amount) {
     setArea((currentArea) => Math.max(0.5, currentArea + amount))
@@ -205,14 +228,52 @@ export default function YieldPage() {
                 }
                 type="button"
                 key={crop.name}
-                onClick={() => setSelectedCrop(crop)}
+                onClick={() => {
+                  setSelectedCrop(crop)
+                  setOtherCropSelected(false)
+                }}
                 aria-pressed={selectedCrop.name === crop.name}
               >
                 <span aria-hidden="true">{crop.icon}</span>
                 {names[crops.indexOf(crop)]}
               </button>
             ))}
+            <button
+              className={otherCropSelected ? 'yield-crop selected' : 'yield-crop'}
+              type="button"
+              onClick={() => setOtherCropSelected(true)}
+              aria-pressed={otherCropSelected}
+            >
+              <span aria-hidden="true">🌱</span>
+              {cropInput.other}
+            </button>
           </div>
+
+          {otherCropSelected && (
+            <div className="yield-other-crop-fields">
+              <CropNameInput
+                id="yield-other-crop-name"
+                language={language}
+                value={otherCropName}
+                onChange={setOtherCropName}
+              />
+              <div className="crop-rate-picker">
+                <label htmlFor="yield-other-crop-rate">
+                  {otherText.rateLabel.replace('{unit}', unit === 'acres' ? t.acres : t.hectares)}
+                </label>
+                <input
+                  id="yield-other-crop-rate"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={otherYieldRate}
+                  onChange={(event) => setOtherYieldRate(event.target.value)}
+                  placeholder="0"
+                />
+                <small>{otherText.rateHint}</small>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="area-picker">
@@ -240,11 +301,7 @@ export default function YieldPage() {
             <button
               className="unit-button"
               type="button"
-              onClick={() =>
-                setUnit((currentUnit) =>
-                  currentUnit === 'acres' ? 'hectares' : 'acres'
-                )
-              }
+              onClick={toggleAreaUnit}
             >
               {unit === 'acres' ? t.acres : t.hectares}
             </button>
@@ -269,21 +326,33 @@ export default function YieldPage() {
 
       <section className="yield-result">
         <span className="yield-result-icon" aria-hidden="true">
-          {selectedCrop.icon}
+          {otherCropSelected ? '🌱' : selectedCrop.icon}
         </span>
 
         <div>
           <p className="section-label">{t.estimate}</p>
-          <h2>{names[crops.indexOf(selectedCrop)]}</h2>
+          <h2>{selectedCropName}</h2>
 
-          <p className="yield-range">
-            {lowEstimate.toFixed(1)}–{highEstimate.toFixed(1)} {language === 'hi' ? 'क्विंटल' : language === 'kn' ? 'ಕ್ವಿಂಟಾಲ್' : language === 'ta' ? 'குவிண்டால்' : language === 'te' ? 'క్వింటాళ్లు' : language === 'ml' ? 'ക്വിന്റൽ' : language === 'bn' ? 'কুইন্টাল' : language === 'mr' ? 'क्विंटल' : language === 'pa' ? 'ਕੁਇੰਟਲ' : 'quintals'}
-          </p>
+          {!otherCropSelected && (
+            <p className="yield-range">
+              {lowEstimate.toFixed(1)}–{highEstimate.toFixed(1)} {quintalLabel}
+            </p>
+          )}
 
-          <p>
-            {t.expected}: {expectedQuintals.toFixed(1)} ·{' '}
-            {expectedKg.toFixed(0)} kg
-          </p>
+          {otherCropSelected ? (
+            customExpectedQuintals !== null ? (
+              <>
+                <p>{t.expected}: {customExpectedQuintals.toFixed(1)} {quintalLabel} · {expectedKg.toFixed(0)} kg</p>
+                <p className="yield-custom-note">{otherText.basedOnInput}</p>
+              </>
+            ) : (
+              <p className="yield-custom-note">{otherText.rateHint}</p>
+            )
+          ) : (
+            <p>
+              {t.expected}: {expectedQuintals.toFixed(1)} · {expectedKg.toFixed(0)} kg
+            </p>
+          )}
 
           {estimatedIncome !== null && (
             <p className="estimated-income">
@@ -298,10 +367,6 @@ export default function YieldPage() {
             <>
               <p>
                 {t.rain}: {recentRain.toFixed(1)} mm
-              </p>
-              <p className="inline-data-source">
-                {credits.weatherDataBy}{' '}
-                <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
               </p>
             </>
           )}

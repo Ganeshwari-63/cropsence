@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { findLocation, formatLocationLabel, getDevicePosition, nameCoordinates } from './locationService.js'
 import { useLanguage } from './locales/LanguageContext.jsx'
-import { featureText, cropNames, soilNames, cropReasonText, cropErrors, soilReasonText } from './locales/featureText.js'
+import { featureText, cropNames, soilNames, cropErrors } from './locales/featureText.js'
 import { translations } from './locales/translations.js'
-import { sourceCredits } from './locales/sourceCredits.js'
+import { cropLiveText } from './locales/cropLiveText.js'
+
+const soilOptions = ['Black', 'Red', 'Sandy', 'Alluvial', 'Mountain', 'Laterite']
 
 const crops = [
   {
@@ -215,7 +217,7 @@ export default function CropPage() {
   const { language } = useLanguage()
   const season = getSeason(new Date())
   const t = featureText[language] || featureText.en
-  const credits = sourceCredits[language] || sourceCredits.en
+  const live = cropLiveText[language] || cropLiveText.en
   const localeNames = cropNames[language] || cropNames.en
   const localeSoils = soilNames[language] || soilNames.en
   const localizedSeason = translations[language]?.[season.toLowerCase()] || season
@@ -226,6 +228,8 @@ export default function CropPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [locating, setLocating] = useState(false)
+  const [weatherRefreshing, setWeatherRefreshing] = useState(false)
+  const [weatherRefreshKey, setWeatherRefreshKey] = useState(0)
   const placeKey = place ? `${place.latitude},${place.longitude}` : ''
   const weather = weatherResult?.placeKey === placeKey ? weatherResult.data : null
 
@@ -250,91 +254,60 @@ export default function CropPage() {
 
   const soil = soilOverride
   const temperature = weather?.current?.temperature_2m
-  const recentRain =
-    weather?.daily?.precipitation_sum
-      ?.slice(0, -5)
-      .reduce((total, amount) => total + (amount || 0), 0) ?? null
+  const today = weather?.current?.time?.slice(0, 10)
+  const todayIndex = today ? weather?.daily?.time?.indexOf(today) ?? -1 : -1
+  const dailyRain = weather?.daily?.precipitation_sum || []
+  const recentRain = todayIndex > 0
+    ? dailyRain.slice(Math.max(0, todayIndex - 30), todayIndex).reduce((total, amount) => total + (amount || 0), 0)
+    : null
+  const nextFiveDayRain = todayIndex >= 0
+    ? dailyRain.slice(todayIndex + 1, todayIndex + 6).reduce((total, amount) => total + (amount || 0), 0)
+    : null
+  const updatedAt = weather?.current?.time
 
   useEffect(() => {
     if (!place) return
 
     let stillOnPage = true
-
     const weatherUrl =
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${place.latitude}` +
       `&longitude=${place.longitude}` +
       `&current=temperature_2m` +
       `&daily=precipitation_sum` +
-      `&past_days=30&forecast_days=5&timezone=auto`
+      `&past_days=30&forecast_days=7&timezone=auto`
 
-    fetch(weatherUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Weather data is unavailable right now.')
-        }
-
-        return response.json()
-      })
-      .then((data) => {
+    async function loadWeather() {
+      setWeatherRefreshing(true)
+      try {
+        const response = await fetch(weatherUrl)
+        if (!response.ok) throw new Error('Weather data is unavailable right now.')
+        const data = await response.json()
         if (stillOnPage) {
-          setWeatherResult({
-            placeKey: `${place.latitude},${place.longitude}`,
-            data,
-          })
+          setWeatherResult({ placeKey, data })
+          setError('')
         }
-      })
-      .catch(() => {
-        if (stillOnPage) {
-          setError(cropErrors[language] || cropErrors.en)
-        }
-      })
+      } catch {
+        if (stillOnPage) setError(cropErrors[language] || cropErrors.en)
+      } finally {
+        if (stillOnPage) setWeatherRefreshing(false)
+      }
+    }
 
+    loadWeather()
+    const refreshTimer = window.setInterval(loadWeather, 30 * 60 * 1000)
     return () => {
       stillOnPage = false
+      window.clearInterval(refreshTimer)
     }
-  }, [place, placeKey, language])
+  }, [place, placeKey, language, weatherRefreshKey])
 
   const recommendations = useMemo(() => {
-    if (!weather || temperature == null || recentRain == null) return []
-
-    return crops
-      .map((crop) => {
-        const seasonMatch = crop.seasons.includes(season)
-        const temperatureMatch =
-          temperature >= crop.minTemp && temperature <= crop.maxTemp
-        const rainfallMatch =
-          recentRain >= crop.minRain && recentRain <= crop.maxRain
-        const soilMatch = soil ? crop.soils.includes(soil) : null
-        const matchCount = [
-          seasonMatch,
-          temperatureMatch,
-          rainfallMatch,
-          soil ? soilMatch : null,
-        ].filter(Boolean).length
-
-        return {
-          ...crop,
-          seasonMatch,
-          temperatureMatch,
-          rainfallMatch,
-          soilMatch,
-          matchCount,
-        }
-      })
-      .filter(
-        (crop) =>
-          crop.seasonMatch &&
-          crop.temperatureMatch &&
-          crop.rainfallMatch &&
-          (soil ? crop.soilMatch : true)
-      )
-      .sort((first, second) =>
-        second.matchCount - first.matchCount ||
-        Number(second.seasonMatch) - Number(first.seasonMatch)
-      )
-      .slice(0, 3)
-  }, [season, soil, temperature, recentRain, weather])
+    if (!soil) return []
+    return crops.filter((crop) =>
+      crop.seasons.includes(season) && crop.soils.includes(soil)
+    )
+  }, [season, soil])
 
   async function handleSearch(event) {
     event.preventDefault()
@@ -382,7 +355,7 @@ export default function CropPage() {
       <section className="crop-heading">
         <p className="section-label">{t.cropTitle}</p>
         <h1>{t.cropTitle}</h1>
-        <p>{t.cropIntro}</p>
+        <p>{live.intro}</p>
       </section>
 
       <section className="crop-location-card">
@@ -427,19 +400,18 @@ export default function CropPage() {
           <section className="soil-card">
             <div>
               <p className="section-label">{t.soilLabel}</p>
-              <h2>{soil ? `${t.soilChosen}: ${localeSoils[['Black','Red','Sandy','Alluvial'].indexOf(soil)]}` : t.soilQuestion}</h2>
+              <h2>{soil ? `${t.soilChosen}: ${localeSoils[soilOptions.indexOf(soil)]}` : t.soilQuestion}</h2>
               <p>{t.soilHint}</p>
             </div>
 
-            <div className="soil-options" aria-label="Choose a different soil">
-              {['Not sure', 'Black', 'Red', 'Sandy', 'Alluvial'].map((soilType, index) => {
-                const value = index === 0 ? '' : soilType
-                const label = index === 0 ? t.notSure : localeSoils[index - 1]
+            <div className="soil-options" role="group" aria-label={t.soilQuestion}>
+              {['', ...soilOptions].map((value) => {
+                const label = value ? localeSoils[soilOptions.indexOf(value)] : t.notSure
 
                 return (
                 <button
                   className={soil === value ? 'soil-option selected' : 'soil-option'}
-                  key={soilType}
+                  key={value || 'not-sure'}
                   type="button"
                   onClick={() => setSoilOverride(value)}
                 >
@@ -450,39 +422,43 @@ export default function CropPage() {
             </div>
           </section>
 
-          <p className="crop-context">
-            {t.season}: <strong>{localizedSeason}</strong>
-            {temperature != null && (
-              <>
-                {' · '}
-                {t.temperature}: <strong>{Math.round(temperature)}°C</strong>
-              </>
-            )}
-            {recentRain != null && (
-              <>
-                {' · '}
-                {t.rain30}: <strong>{recentRain.toFixed(0)} mm</strong>
-              </>
-            )}
-          </p>
-          <p className="inline-data-source">
-            {credits.weatherDataBy}{' '}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
-          </p>
+          <section className="crop-weather-summary">
+            <div>
+              <p className="section-label">{live.currentConditions}</p>
+              {weather ? (
+                <>
+                  <p className="crop-context">
+                    {t.season}: <strong>{localizedSeason}</strong>
+                    {temperature != null && <> · {t.temperature}: <strong>{Math.round(temperature)}°C</strong></>}
+                    {recentRain != null && <> · {t.rain30}: <strong>{recentRain.toFixed(0)} mm</strong></>}
+                    {nextFiveDayRain != null && <> · {live.forecastRain}: <strong>{nextFiveDayRain.toFixed(0)} mm</strong></>}
+                  </p>
+                  {updatedAt && (
+                    <p className="crop-weather-updated">
+                      {live.updated}: <time dateTime={updatedAt}>{new Intl.DateTimeFormat(language === 'en' ? 'en-IN' : `${language}-IN`, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(updatedAt))}</time>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className={error ? 'error-message' : 'crop-context'} role={error ? 'alert' : undefined}>
+                  {error || t.loading}
+                </p>
+              )}
+              <p className="crop-weather-note">{live.weatherContext}</p>
+            </div>
+            <button
+              className="secondary-button crop-weather-refresh"
+              type="button"
+              onClick={() => setWeatherRefreshKey((current) => current + 1)}
+              disabled={weatherRefreshing}
+            >
+              {weatherRefreshing ? live.refreshing : live.refresh}
+            </button>
+          </section>
 
-          {!weather && !error && (
-            <p className="loading-message">
-              {t.loading}
-            </p>
-          )}
-
-          {weather && (
-            <section className="crop-results">
-            <h2>{t.matches} {place.name}</h2>
-            <p className="crop-context-note">
-              {t.checked}{soil ? `, ${soil}` : ''}.
-            </p>
-
+          <section className="crop-results">
+            <h2>{live.candidates} {place.name}</h2>
+            <p className="crop-context-note">{soil ? live.method : live.selectSoil}</p>
             {recommendations.length > 0 ? (
               <div className="crop-grid">
                 {recommendations.map((crop) => (
@@ -494,31 +470,26 @@ export default function CropPage() {
                     <div>
                       <h3>{localeNames[crops.findIndex((item) => item.name === crop.name)]}</h3>
                     </div>
-
-                    <p className="crop-reason">
-                      <strong>{t.why}</strong>{' '}
-                      {(cropReasonText[language] || cropReasonText.en)
-                        .replace('{season}', localizedSeason)
-                        .replace('{temp}', String(Math.round(temperature)))
-                        .replace('{rain}', recentRain.toFixed(0))
-                        .replace('{soil}', soil ? `${soilReasonText[language] || soilReasonText.en}: ${localeSoils[['Black','Red','Sandy','Alluvial'].indexOf(soil)]}` : '')}
-                    </p>
                   </article>
                 ))}
               </div>
-            ) : (
+            ) : soil ? (
               <p className="crop-context-note" role="status">
-                {t.noMatches}
+                {live.noCandidates}
               </p>
-            )}
+            ) : null}
 
-            <p className="crop-data-source">{t.source}</p>
+            <aside className="crop-official-advisory">
+              <h3>{live.advisoryHeading}</h3>
+              <p>{live.advisoryNote}</p>
+              <a href={language === 'en'
+                ? 'https://mausam.imd.gov.in/imd_latest/contents/agromet/advisory/benglishmain.php'
+                : 'https://mausam.imd.gov.in/imd_latest/contents/agromet/advisory/blocalmain.php'}
+                target="_blank" rel="noreferrer">
+                {live.advisoryLink}
+              </a>
+            </aside>
           </section>
-          )}
-
-          <p className="crop-disclaimer">
-            {t.source}
-          </p>
         </>
       )}
     </main>

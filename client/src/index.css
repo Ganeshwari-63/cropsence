@@ -2002,3 +2002,239 @@ html:lang(pa) h1 {
   color: #52665a;
   font-size: 12px;
 }
+
+.crop-weather-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 24px 0;
+  padding: 22px;
+  border: 1px solid #e3eadb;
+  border-radius: 22px;
+  background: #fffefa;
+  box-shadow: 0 12px 30px rgb(50 76 39 / 7%);
+}
+
+.crop-weather-summary > div {
+  min-width: 0;
+}
+
+.crop-weather-summary .section-label {
+  margin: 0 0 10px;
+  color: #496e3b;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+}
+
+.crop-weather-summary .crop-context {
+  margin: 0 0 8px;
+}
+
+.crop-weather-updated,
+.crop-weather-note {
+  margin: 8px 0;
+  color: #53634e;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.crop-weather-refresh {
+  flex: 0 0 auto;
+  min-height: 48px;
+  font-size: 15px;
+}
+
+.crop-official-advisory {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid #d9e4cf;
+  border-radius: 18px;
+  background: #f5f8ef;
+}
+
+.crop-official-advisory h3 {
+  margin: 0 0 8px;
+  color: #315d34;
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+.crop-official-advisory p,
+.crop-official-advisory a {
+  color: #455a45;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.crop-official-advisory a {
+  display: inline-block;
+  margin-top: 4px;
+  color: #1f5731;
+  font-weight: 800;
+  text-underline-offset: 3px;
+}
+
+.crop-name-input,
+.crop-rate-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.crop-name-input label,
+.crop-rate-picker label {
+  color: #405341;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.crop-name-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crop-name-input-row input,
+.crop-rate-picker input {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 1px solid #d9e4cf;
+  border-radius: 13px;
+  background: #fff;
+  color: #2b2b2b;
+  font: inherit;
+  font-size: 16px;
+}
+
+.crop-name-input-row input:focus,
+.crop-rate-picker input:focus {
+  outline: 3px solid rgb(76 175 80 / 25%);
+  border-color: #4caf50;
+}
+
+.crop-speech-button {
+  flex: 0 0 auto;
+  min-height: 50px;
+  font-size: 15px;
+}
+
+.crop-speech-status,
+.crop-rate-picker small,
+.yield-custom-note {
+  color: #53634e;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.yield-other-crop-fields {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.crop-rate-picker {
+  max-width: 520px;
+}
+
+.yield-custom-note {
+  margin-top: 8px;
+}
+
+@media (max-width: 680px) {
+  .weather-page,
+  .crop-page,
+  .yield-page,
+  .disease-page {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  .weather-heading > p:last-child,
+  .crop-heading > p:last-child,
+  .yield-heading > p:last-child,
+  .disease-heading > p:last-child,
+  .features-intro > p:last-child,
+  .feature-description,
+  .about-step p {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .crop-location-card,
+  .soil-card,
+  .yield-location,
+  .yield-controls,
+  .crop-weather-summary,
+  .crop-official-advisory {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .location-card p,
+  .crop-location-card p,
+  .yield-location p,
+  .crop-context,
+  .crop-context-note,
+  .weather-note,
+  .advice-card p,
+  .crop-weather-updated,
+  .crop-weather-note,
+  .crop-official-advisory p,
+  .crop-official-advisory a {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .soil-options {
+    width: 100%;
+    gap: 9px;
+  }
+
+  .soil-option,
+  .yield-crop {
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .crop-weather-summary {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .crop-weather-refresh {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .crop-name-input-row {
+    flex-direction: column;
+  }
+
+  .crop-speech-button {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .crop-name-input-row input,
+  .crop-rate-picker input,
+  .field-advice select {
+    min-height: 52px;
+    font-size: 16px;
+  }
+
+  .crop-card h3 {
+    font-size: 19px;
+    line-height: 1.45;
+  }
+
+  .main-nav a {
+    font-size: 12px;
+  }
+}
