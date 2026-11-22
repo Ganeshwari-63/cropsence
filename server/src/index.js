@@ -279,6 +279,85 @@ const resultSchema = {
   ],
 }
 
+app.post('/api/transcribe-crop', rateLimit({ scope: 'transcribe-crop', limit: 12, windowMs: 60_000 }), async (request, response) => {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    return response.status(503).json({ error: 'Speech transcription is not configured.' })
+  }
+
+  const { audio, mimeType } = request.body || {}
+  const interfaceLanguage = {
+    en: 'English', hi: 'Hindi', kn: 'Kannada', ta: 'Tamil', te: 'Telugu',
+    ml: 'Malayalam', bn: 'Bengali', mr: 'Marathi', pa: 'Punjabi',
+  }[request.body?.language] || 'English'
+  const allowedTypes = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/aac']
+  if (
+    typeof audio !== 'string' ||
+    audio.length > 3_500_000 ||
+    !allowedTypes.includes(mimeType) ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(audio)
+  ) {
+    return response.status(400).json({ error: 'A supported audio recording is required.' })
+  }
+
+  const audioBytes = Buffer.from(audio, 'base64')
+  const validSignature = mimeType === 'audio/webm'
+    ? audioBytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+    : mimeType === 'audio/mp4'
+      ? audioBytes.toString('ascii', 4, 8) === 'ftyp'
+      : mimeType === 'audio/ogg'
+        ? audioBytes.toString('ascii', 0, 4) === 'OggS'
+        : mimeType === 'audio/wav'
+          ? audioBytes.toString('ascii', 0, 4) === 'RIFF' && audioBytes.toString('ascii', 8, 12) === 'WAVE'
+          : mimeType === 'audio/mpeg'
+            ? audioBytes.toString('ascii', 0, 3) === 'ID3' || (audioBytes[0] === 0xff && (audioBytes[1] & 0xe0) === 0xe0)
+            : audioBytes[0] === 0xff && (audioBytes[1] & 0xf6) === 0xf0
+  if (!audioBytes.length || audioBytes.length > 2_500_000 || !validSignature) {
+    return response.status(400).json({ error: 'The recording is empty, too large, or not a supported audio file.' })
+  }
+
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  try {
+    const geminiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType, data: audio } },
+            { text: `Transcribe only the crop name clearly spoken in this short audio. The interface language is ${interfaceLanguage}, but the speaker may use any language. Return the words exactly as heard, in the language and script spoken. Do not translate, infer a crop, add explanations, or guess missing words. If no clear crop name is spoken, return an empty response.` },
+          ],
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 80 },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const geminiData = await geminiResponse.json().catch(() => ({}))
+
+    if (!geminiResponse.ok) {
+      if (geminiResponse.status === 429) {
+        return response.status(429).json({ error: 'Speech transcription limit reached. Please wait and try again.' })
+      }
+      if ([401, 403].includes(geminiResponse.status)) {
+        return response.status(502).json({ error: 'Speech transcription service rejected its API key.' })
+      }
+      console.error('Crop speech transcription failed:', geminiResponse.status, geminiData.error?.message || 'No details returned')
+      return response.status(502).json({ error: 'Speech transcription service could not process this recording.' })
+    }
+
+    const transcript = geminiData.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || '')
+      .join('')
+      .trim() || ''
+    response.json({ transcript: transcript.slice(0, 80) })
+  } catch (error) {
+    console.error('Crop speech transcription failed:', error.message)
+    response.status(502).json({ error: 'Speech transcription service is unavailable.' })
+  }
+})
+
 app.post('/api/analyze-leaf', rateLimit({ scope: 'analyze-leaf', limit: 8, windowMs: 60_000 }), async (request, response) => {
   const apiKey = process.env.GEMINI_API_KEY
 
