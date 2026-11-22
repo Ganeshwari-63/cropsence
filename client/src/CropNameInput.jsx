@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { cropInputText } from './locales/cropInputText.js'
+import { cropInputText, cropSpeechErrorText } from './locales/cropInputText.js'
 
 const speechLocales = {
   en: 'en-IN',
@@ -15,18 +15,116 @@ const speechLocales = {
 
 export default function CropNameInput({ id, language, value, onChange }) {
   const text = cropInputText[language] || cropInputText.en
+  const speechErrors = cropSpeechErrorText[language] || cropSpeechErrorText.en
   const recognitionRef = useRef(null)
+  const shouldListenRef = useRef(false)
+  const restartTimerRef = useRef(null)
+  const committedTextRef = useRef(value.trim())
+  const baseTextRef = useRef(value.trim())
   const [listening, setListening] = useState(false)
   const [message, setMessage] = useState('')
   const SpeechRecognition = typeof window !== 'undefined'
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null
 
-  useEffect(() => () => recognitionRef.current?.abort(), [])
+  useEffect(() => () => {
+    shouldListenRef.current = false
+    if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current)
+    recognitionRef.current?.abort()
+  }, [])
+
+  function stopListening(nextMessage = '') {
+    shouldListenRef.current = false
+    setListening(false)
+    setMessage(nextMessage)
+    if (restartTimerRef.current) {
+      window.clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+    const recognition = recognitionRef.current
+    recognitionRef.current = null
+    try { recognition?.stop() } catch { /* Recognition may have already stopped. */ }
+  }
+
+  function startRecognition() {
+    if (!shouldListenRef.current) return
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = speechLocales[language] || 'en-IN'
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.maxAlternatives = 1
+    baseTextRef.current = committedTextRef.current || value.trim()
+
+    recognition.onstart = () => {
+      if (!shouldListenRef.current) return
+      setListening(true)
+      setMessage(text.listening)
+    }
+    recognition.onresult = (event) => {
+      const finalSegments = []
+      const interimSegments = []
+      for (let index = 0; index < event.results.length; index += 1) {
+        const transcript = event.results[index][0]?.transcript?.trim()
+        if (!transcript) continue
+        if (event.results[index].isFinal) finalSegments.push(transcript)
+        else interimSegments.push(transcript)
+      }
+
+      const finalized = [baseTextRef.current, finalSegments.join(' ')].filter(Boolean).join(' ').trim()
+      if (finalSegments.length) committedTextRef.current = finalized
+      const currentText = [finalized, interimSegments.join(' ')].filter(Boolean).join(' ').trim()
+      if (currentText) onChange(currentText)
+    }
+    recognition.onnomatch = () => {
+      if (shouldListenRef.current) setMessage(text.listening)
+    }
+    recognition.onerror = (event) => {
+      if (event.error === 'aborted') return
+      if (event.error === 'no-speech') {
+        // Some browsers end a silent listening session quickly. Keep waiting for speech.
+        if (shouldListenRef.current) setMessage(text.listening)
+        return
+      }
+
+      const nextMessage = event.error === 'not-allowed' || event.error === 'service-not-allowed'
+        ? speechErrors.permission
+        : event.error === 'audio-capture'
+          ? speechErrors.microphone
+          : text.error
+      shouldListenRef.current = false
+      setListening(false)
+      setMessage(nextMessage)
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
+    }
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) recognitionRef.current = null
+      if (!shouldListenRef.current) return
+
+      // Speech services may disconnect after silence even when continuous mode is enabled.
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null
+        if (shouldListenRef.current) startRecognition()
+      }, 350)
+    }
+    recognitionRef.current = recognition
+
+    try {
+      recognition.start()
+    } catch {
+      shouldListenRef.current = false
+      setListening(false)
+      setMessage(text.error)
+      recognitionRef.current = null
+    }
+  }
 
   function toggleSpeech() {
-    if (listening) {
-      recognitionRef.current?.stop()
+    if (shouldListenRef.current) {
+      stopListening()
       return
     }
 
@@ -35,37 +133,12 @@ export default function CropNameInput({ id, language, value, onChange }) {
       return
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.lang = speechLocales[language] || 'en-IN'
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    recognition.onstart = () => {
-      setListening(true)
-      setMessage('')
-    }
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim()
-      if (transcript) onChange(transcript)
-      setMessage('')
-    }
-    recognition.onerror = (event) => {
-      if (event.error !== 'aborted') setMessage(text.error)
-      setListening(false)
-    }
-    recognition.onend = () => {
-      setListening(false)
-      if (recognitionRef.current === recognition) recognitionRef.current = null
-    }
-    recognitionRef.current = recognition
-
-    try {
-      recognition.start()
-    } catch {
-      setListening(false)
-      setMessage(text.error)
-      recognitionRef.current = null
-    }
+    committedTextRef.current = value.trim()
+    baseTextRef.current = value.trim()
+    shouldListenRef.current = true
+    setListening(true)
+    setMessage(text.listening)
+    startRecognition()
   }
 
   return (

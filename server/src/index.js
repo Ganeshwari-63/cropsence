@@ -22,7 +22,7 @@ app.use((request, response, next) => {
   response.setHeader('X-Content-Type-Options', 'nosniff')
   response.setHeader('X-Frame-Options', 'DENY')
   response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  response.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()')
+  response.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=(self)')
   response.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
   if (process.env.NODE_ENV === 'production') {
     response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
