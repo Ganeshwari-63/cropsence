@@ -1467,14 +1467,17 @@ html:lang(pa) h1 {
   }
 
   .main-nav {
-    flex: 1;
-    justify-content: center;
-    gap: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: space-evenly;
+    gap: clamp(4px, 1.2vw, 9px);
   }
 
   .main-nav a {
-    padding: 8px 6px;
-    font-size: 11px;
+    flex: 0 1 auto;
+    padding: 8px clamp(4px, 1vw, 7px);
+    font-size: clamp(10px, 2.8vw, 12px);
+    white-space: nowrap;
   }
 
   .language-picker select {
@@ -1488,8 +1491,8 @@ html:lang(pa) h1 {
   .hero {
     height: 100%;
     min-height: 0;
-    align-items: flex-end;
-    padding: 90px 22px 48px;
+    align-items: center;
+    padding: 100px 22px 48px;
   }
 
   .hero-video-shade {
@@ -1521,7 +1524,7 @@ html:lang(pa) h1 {
 
   .hero-description {
     margin: 12px 0 16px;
-    font-size: 14px;
+    font-size: clamp(15px, 3.8vw, 16px);
     line-height: 1.45;
   }
 
@@ -1704,19 +1707,19 @@ html:lang(pa) h1 {
   }
 
   .site-header {
-    gap: 2px;
+    gap: 4px;
     padding-right: 6px;
     padding-left: 6px;
   }
 
   .brand-copy strong {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .main-nav a {
-    padding-right: 2px;
-    padding-left: 2px;
-    font-size: 9px;
+    padding-right: 4px;
+    padding-left: 4px;
+    font-size: 10px;
     white-space: nowrap;
   }
 
@@ -1733,7 +1736,7 @@ html:lang(pa) h1 {
   }
 
   .hero {
-    padding-top: 72px;
+    padding-top: 78px;
     padding-bottom: 22px;
   }
 
