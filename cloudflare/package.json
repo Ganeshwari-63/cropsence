@@ -1,0 +1,13 @@
+{
+  "name": "cropsense-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix ../client run build && node ./prepare-assets.mjs",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
+  }
+}

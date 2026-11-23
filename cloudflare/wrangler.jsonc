@@ -1,0 +1,53 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cropsense",
+  "main": "./src/index.js",
+  "compatibility_date": "2026-11-22",
+  "assets": {
+    "directory": "../client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api",
+      "/api/*",
+      "/videos/features/weather.mp4",
+      "/videos/features/yield.mp4"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GEO_LOOKUP",
+        "class_name": "GeoLookup"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GeoLookup"]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "API_LIMITER",
+      "namespace_id": "9276412201",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "LOOKUP_LIMITER",
+      "namespace_id": "9276412202",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      "name": "TRANSCRIBE_LIMITER",
+      "namespace_id": "9276412203",
+      "simple": { "limit": 12, "period": 60 }
+    },
+    {
+      "name": "ANALYZE_LIMITER",
+      "namespace_id": "9276412204",
+      "simple": { "limit": 8, "period": 60 }
+    }
+  ]
+}
